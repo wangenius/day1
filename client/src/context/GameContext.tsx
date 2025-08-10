@@ -320,6 +320,10 @@ export function GameProvider({ children }: GameProviderProps) {
         // 设置轮次事件
         if (message.data.roundEvent) {
           setRoundEvent(message.data.roundEvent as RoundEvent);
+          // 检查是否使用了默认事件
+          if (message.data.isDefaultEvent) {
+            addMessage(`⚠️ AI事件生成遇到问题，已使用备用事件确保游戏继续`);
+          }
         }
         // 设置私人消息
         if (message.data.privateMessages) {
@@ -342,6 +346,10 @@ export function GameProvider({ children }: GameProviderProps) {
         // 更新轮次事件
         if (message.data.roundEvent) {
           setRoundEvent(message.data.roundEvent as RoundEvent);
+          // 检查是否使用了默认事件
+          if (message.data.isDefaultEvent) {
+            addMessage(`⚠️ AI事件生成遇到问题，已使用备用事件确保游戏继续`);
+          }
         }
         // 更新私人消息
         if (message.data.privateMessages) {

@@ -110,17 +110,42 @@ class LLM:
 
             content = response.choices[0].message.content or ""
 
+            # 清理可能的markdown格式
             if content.startswith("```json"):
                 content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
             if content.endswith("```"):
                 content = content[:-3]
+            
+            # 清理可能的空白字符
+            content = content.strip()
+            
+            # 尝试修复常见的JSON格式错误
+            content = self._fix_common_json_errors(content)
 
             logger.info(f"生成结果:{content}")
             return json.loads(content)
         except json.JSONDecodeError as e:
+            logger.error(f"JSON解析失败，原始内容: {content}")
             raise Exception(f"返回的内容不是有效的JSON格式: {str(e)}")
         except Exception as e:
             raise Exception(f"调用OpenAI API失败: {str(e)}")
+    
+    def _fix_common_json_errors(self, content: str) -> str:
+        """修复常见的JSON格式错误"""
+        import re
+        
+        # 移除多余的逗号（如 },, 或 ],）
+        content = re.sub(r',\s*([}\]])', r'\1', content)
+        
+        # 修复缺失的引号（简单情况）
+        content = re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', content)
+        
+        # 移除末尾多余的逗号
+        content = re.sub(r',\s*$', '', content)
+        
+        return content
 
     def chat(
         self,

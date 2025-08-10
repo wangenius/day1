@@ -1,7 +1,10 @@
+import ReactMarkdown from 'react-markdown';
+
 interface EventModalProps {
   isOpen: boolean;
   currentRound: number;
   roundEvent: any;
+  gameBackground?: string | null;
   onClose: () => void;
 }
 
@@ -12,11 +15,14 @@ export const EventModal = ({
   isOpen, 
   currentRound, 
   roundEvent, 
+  gameBackground,
   onClose 
 }: EventModalProps) => {
   if (!isOpen || !roundEvent) {
     return null;
   }
+
+
 
   return (
     <div className="fixed inset-0 z-50">
@@ -57,7 +63,7 @@ export const EventModal = ({
         </div>
 
         {/* 事件详情内容区域 */}
-        <div className="px-8 pb-8">
+        <div className="px-8 pb-4">
           <div className="bg-gradient-to-b from-stone-800/60 to-stone-900/80 rounded-xl p-6 border border-stone-700/50 backdrop-blur-sm relative overflow-hidden">
             {/* 装饰性背景图案 */}
             <div className="absolute top-0 right-0 w-32 h-32 opacity-5">
@@ -85,6 +91,24 @@ export const EventModal = ({
             </div>
           </div>
         </div>
+
+        {/* 创业背景信息区域 */}
+        {gameBackground && (
+          <div className="px-8 pb-8">
+            <div className="bg-gradient-to-b from-blue-900/30 to-blue-950/50 rounded-xl p-4 border border-blue-700/30 backdrop-blur-sm max-h-64 overflow-y-auto">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-blue-300 text-lg">📖</span>
+                <h3 className="text-blue-300 text-base font-semibold font-['Cactus_Classical_Serif']">
+                  创业背景
+                </h3>
+              </div>
+              
+              <div className="text-sm text-gray-300 font-['Cactus_Classical_Serif'] markdown-content">
+                <ReactMarkdown>{gameBackground}</ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 底部提示 */}
         <div className="absolute bottom-8 left-0 right-0 text-center">

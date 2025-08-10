@@ -42,6 +42,7 @@ function GamePlay() {
     roundEvent,
     privateMessages,
     playerActions,
+    gameBackground,
     handleActionSubmit,
   } = useGame();
 
@@ -247,6 +248,7 @@ function GamePlay() {
         isOpen={showEventModal}
         currentRound={currentRound}
         roundEvent={roundEvent}
+        gameBackground={gameBackground}
         onClose={() => setShowEventModal(false)}
       />
     </>

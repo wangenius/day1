@@ -421,32 +421,22 @@ class GameHandler:
         )
 
         # 生成第一轮事件
-        try:
-            event_data = await asyncio.get_event_loop().run_in_executor(
-                None, room.generate_event, 1
-            )
+        # 调用房间的generate_event方法，该方法已经包含了重试机制和默认事件处理
+        event_data = await asyncio.get_event_loop().run_in_executor(
+            None, room.generate_event, 1
+        )
 
-            # 保存事件和私人信息到房间状态
-            room.round_events[1] = event_data["event"]
-            room.round_private_messages[1] = event_data["private_messages"]
-            if "situation" in event_data:
-                room.round_situation[1] = event_data["situation"]
+        # 保存事件和私人信息到房间状态
+        room.round_events[1] = event_data["event"]
+        room.round_private_messages[1] = event_data["private_messages"]
+        if "situation" in event_data:
+            room.round_situation[1] = event_data["situation"]
 
+        is_default_event = event_data.get("is_default_event", False)
+        if is_default_event:
+            logger.warning(f"房间 {room_id} 第1轮使用了默认事件")
+        else:
             logger.info(f"房间 {room_id} 第1轮事件生成成功")
-        except Exception as e:
-            logger.error(f"房间 {room_id} 生成第1轮事件失败: {str(e)}")
-            # 如果生成失败，使用默认事件
-            default_event = {
-                "description": "团队面临第一个重要决策...",
-                "options": [
-                    "选项1: 保守策略",
-                    "选项2: 激进策略",
-                    "选项3: 平衡策略",
-                    "选项4: 创新策略",
-                ],
-            }
-            room.round_events[1] = default_event
-            room.round_private_messages[1] = {}
 
         # 第六步：设置游戏状态为进行中并广播游戏开始消息
         room.game_state = GameState.PLAYING
@@ -458,6 +448,7 @@ class GameHandler:
                     "round": 1,
                     "roundEvent": room.round_events[1],
                     "privateMessages": room.round_private_messages[1],
+                    "isDefaultEvent": is_default_event,  # 传递默认事件标志
                 },
             },
         )
@@ -568,49 +559,36 @@ class GameHandler:
         )
 
         # 生成当前轮次的事件
-        try:
+        # 设置之前的输出用于生成连贯的事件
+        if room.current_round > 1:
+            previous_round = room.current_round - 1
+            if previous_round in room.round_actions:
+                room.round_situation[room.current_round] = {
+                    "round": previous_round,
+                    "players_choices": {},  # 这里可以根据实际行动数据构建
+                    "final_choice": 1,  # 简化处理
+                    "impact": "上一轮的决策产生了影响...",
+                }
 
-            # 设置之前的输出用于生成连贯的事件
-            if room.current_round > 1:
-                previous_round = room.current_round - 1
-                if previous_round in room.round_actions:
-                    room.round_situation[room.current_round] = {
-                        "round": previous_round,
-                        "players_choices": {},  # 这里可以根据实际行动数据构建
-                        "final_choice": 1,  # 简化处理
-                        "impact": "上一轮的决策产生了影响...",
-                    }
+        # 调用房间的generate_event方法，该方法已经包含了重试机制和默认事件处理
+        event_data = await asyncio.get_event_loop().run_in_executor(
+            None, room.generate_event, room.current_round
+        )
 
-            event_data = await asyncio.get_event_loop().run_in_executor(
-                None, room.generate_event, room.current_round
-            )
+        # 保存事件和私人信息到房间状态
+        room.round_events[room.current_round] = event_data["event"]
+        room.round_private_messages[room.current_round] = event_data[
+            "private_messages"
+        ]
+        if "situation" in event_data:
+            room.round_situation[room.current_round] = event_data["situation"]
 
-            # 保存事件和私人信息到房间状态
-            room.round_events[room.current_round] = event_data["event"]
-            room.round_private_messages[room.current_round] = event_data[
-                "private_messages"
-            ]
-            if "situation" in event_data:
-                room.round_situation[room.current_round] = event_data["situation"]
-
+        is_default_event = event_data.get("is_default_event", False)
+        if is_default_event:
+            logger.warning(f"房间 {room_id} 第{room.current_round}轮使用了默认事件")
+        else:
             logger.info(f"房间 {room_id} 第{room.current_round}轮事件生成成功")
-            logger.info(f"私人信息内容: {event_data['private_messages']}")
-        except Exception as e:
-            logger.error(
-                f"房间 {room_id} 生成第{room.current_round}轮事件失败: {str(e)}"
-            )
-            # 如果生成失败，使用默认事件
-            default_event = {
-                "description": f"团队面临第{room.current_round}轮的重要决策...",
-                "options": [
-                    "选项1: 保守策略",
-                    "选项2: 激进策略",
-                    "选项3: 平衡策略",
-                    "选项4: 创新策略",
-                ],
-            }
-            room.round_events[room.current_round] = default_event
-            room.round_private_messages[room.current_round] = {}
+        logger.info(f"私人信息内容: {event_data['private_messages']}")
 
         # 设置游戏状态为进行中并广播轮次开始
         room.game_state = GameState.PLAYING
@@ -623,6 +601,7 @@ class GameHandler:
                     "roundInfo": room.get_round_info(room.current_round),
                     "roundEvent": room.round_events[room.current_round],
                     "privateMessages": room.round_private_messages[room.current_round],
+                    "isDefaultEvent": is_default_event,  # 传递默认事件标志
                 },
             },
         )

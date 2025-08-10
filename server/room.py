@@ -4,7 +4,10 @@ from datetime import datetime
 from pydantic import BaseModel
 import random
 import os
+import logging
 from llm import LLM
+
+logger = logging.getLogger(__name__)
 
 # 读取prompt模板
 with open(
@@ -264,16 +267,138 @@ class GameRoom(BaseModel):
             prompt = prompt.replace("{situation}", default_situation)
             prompt = prompt.replace("{previous_output}", default_situation)
 
-        response_json = LLM().json(prompt, temperature=0.7)
-
-        # 添加调试信息
-        print(f"本轮事件的信息: {response_json}")
-
-        # 返回完整的事件数据，包含私人信息
+        # 添加重试机制，最多重试3次
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response_json = LLM().json(prompt, temperature=0.7)
+                
+                # 添加调试信息
+                print(f"本轮事件的信息: {response_json}")
+                
+                # 验证返回的JSON结构
+                if not self._validate_event_response(response_json):
+                    raise ValueError("返回的JSON结构不完整")
+                
+                # 返回完整的事件数据，包含私人信息
+                return {
+                    "situation": response_json.get("situation", ""),
+                    "event": response_json.get("event", ""),
+                    "private_messages": response_json.get("private_messages", {}),
+                    "is_default_event": False  # 标记这是AI生成的事件
+                }
+            except Exception as e:
+                logger.error(f"第{attempt + 1}次尝试生成第{round_num}轮事件失败: {str(e)}")
+                if attempt == max_retries - 1:
+                    # 最后一次重试失败，返回默认事件
+                    logger.error(f"生成第{round_num}轮事件彻底失败，使用默认事件")
+                    return self._get_default_event(round_num)
+                # 稍微调整temperature重试
+                prompt = prompt.replace("temperature=0.7", f"temperature={0.5 + attempt * 0.1}")
+        
+        # 兜底返回默认事件
+        return self._get_default_event(round_num)
+    
+    def _validate_event_response(self, response_json):
+        """验证事件响应的JSON结构"""
+        if not isinstance(response_json, dict):
+            return False
+        
+        # 检查必需的字段
+        required_fields = ["event", "private_messages"]
+        for field in required_fields:
+            if field not in response_json:
+                return False
+        
+        # 检查event字段结构
+        event = response_json.get("event", {})
+        if not isinstance(event, dict):
+            return False
+        
+        event_required_fields = ["event_title", "event_description", "decision_options"]
+        for field in event_required_fields:
+            if field not in event:
+                return False
+        
+        # 检查private_messages字段结构
+        private_messages = response_json.get("private_messages", {})
+        if not isinstance(private_messages, dict):
+            return False
+        
+        # 检查是否包含所有角色的私信
+        required_roles = ["CEO", "CTO", "CMO", "COO"]
+        for role in required_roles:
+            if role not in private_messages:
+                return False
+        
+        return True
+    
+    def _get_default_event(self, round_num):
+        """获取默认事件（当AI生成失败时使用）"""
+        default_events = {
+            1: {
+                "event_title": "团队组建挑战",
+                "event_description": "创业初期，团队需要明确各自职责和合作方式，面临第一个重要的团队决策。",
+                "decision_options": {
+                    "A": "立即制定详细的工作分工和流程规范",
+                    "B": "保持灵活性，根据实际情况逐步调整",
+                    "C": "优先建立团队文化和价值观共识"
+                }
+            },
+            2: {
+                "event_title": "产品开发方向",
+                "event_description": "产品概念基本确定，现在需要决定开发的优先级和技术路线。",
+                "decision_options": {
+                    "A": "专注核心功能，快速打造MVP版本",
+                    "B": "全面开发，确保产品功能完整",
+                    "C": "重点研发创新技术，追求技术突破"
+                }
+            },
+            3: {
+                "event_title": "市场进入策略",
+                "event_description": "产品开发接近完成，需要制定市场推广和用户获取策略。",
+                "decision_options": {
+                    "A": "大规模营销推广，快速占领市场",
+                    "B": "精准定位目标用户，稳步推进",
+                    "C": "先在小范围测试，收集反馈后调整"
+                }
+            },
+            4: {
+                "event_title": "融资决策",
+                "event_description": "公司发展到关键阶段，面临重要的融资选择和股权决策。",
+                "decision_options": {
+                    "A": "积极寻求风险投资，加速发展",
+                    "B": "保持自主发展，控制股权稀释",
+                    "C": "寻找战略投资者，获得资源支持"
+                }
+            },
+            5: {
+                "event_title": "规模化挑战",
+                "event_description": "业务快速增长，需要决定如何应对规模化带来的挑战。",
+                "decision_options": {
+                    "A": "大力扩张团队和业务规模",
+                    "B": "优化现有流程，提高运营效率",
+                    "C": "多元化发展，拓展新的业务线"
+                }
+            }
+        }
+        
+        # 如果轮次超出预定义范围，使用最后一个事件模板
+        event_data = default_events.get(round_num, default_events[5])
+        
+        # 生成默认私信
+        default_private_messages = {
+            "CEO": f"第{round_num}轮：作为CEO，你需要权衡各方利益，做出最终决策。",
+            "CTO": f"第{round_num}轮：从技术角度分析，每个选项都有其技术可行性和风险。",
+            "CMO": f"第{round_num}轮：市场竞争激烈，需要考虑用户反应和品牌影响。",
+            "COO": f"第{round_num}轮：运营成本和效率是关键考虑因素。"
+        }
+        
         return {
-            "situation": response_json.get("situation", ""),
-            "event": response_json.get("event", ""),
-            "private_messages": response_json.get("private_messages", {}),
+            "situation": f"第{round_num}轮：公司发展进入新阶段，面临重要决策。",
+            "event": event_data,
+            "private_messages": default_private_messages,
+            "is_default_event": True  # 标记这是默认事件
         }
 
     def calculate_game_result(self) -> Dict:
