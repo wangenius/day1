@@ -381,6 +381,12 @@ export function GameProvider({ children }: GameProviderProps) {
         setPlayers(message.data.players as Player[]);
         addMessage("🔄 房主重新开始了游戏");
         break;
+      // 角色选择错误
+      case "role_selection_error":
+        addMessage(`❌ ${message.data.message}`, "error");
+        // 这里可以添加重置本地角色选择状态的逻辑
+        // 例如：触发一个全局状态更新让RoleSelection组件重置
+        break;
       // 未知消息类型
       default:
         addMessage(`收到消息: ${JSON.stringify(message)}`);

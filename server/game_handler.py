@@ -266,64 +266,117 @@ class GameHandler:
 
     @staticmethod
     async def handle_role_selection(player_name: str, role: str):
-        """处理角色选择"""
+        """处理角色选择 - 使用锁确保原子性"""
         room_id = connection_manager.get_player_room(player_name)
         if not room_id:
+            logger.warning(f"玩家 {player_name} 未找到房间")
             return
 
         room = room_manager.get_room(room_id)
         if not room:
+            logger.warning(f"房间 {room_id} 不存在")
             return
 
-        player = room.get_player(player_name)
-        if not player:
+        # 获取房间锁，确保角色选择的原子性
+        room_lock = room_manager.get_room_lock(room_id)
+        if not room_lock:
+            logger.error(f"房间 {room_id} 缺少锁")
             return
 
-        # 将角色ID转换为小写以匹配枚举值
-        role_lower = role.lower()
+        # 使用异步锁确保整个角色选择操作的原子性
+        async with room_lock:
+            logger.info(f"玩家 {player_name} 获得房间 {room_id} 锁，开始角色选择")
+            
+            player = room.get_player(player_name)
+            if not player:
+                logger.warning(f"玩家 {player_name} 在房间 {room_id} 中不存在")
+                return
 
-        # 检查角色是否有效
-        if role_lower not in Role.__members__.values():
-            return
+            # 检查玩家是否已经选择过角色
+            if player.role:
+                logger.warning(f"玩家 {player_name} 已经选择过角色: {player.role}")
+                await connection_manager.send_to_player(
+                    player_name,
+                    {
+                        "type": "role_selection_error",
+                        "data": {"message": "你已经选择过角色了"},
+                    },
+                )
+                return
 
-        # 检查角色是否已被选择
-        role_taken = any(
-            p.role == role_lower for p in room.players if p.name != player_name
-        )
-        if role_taken:
-            return
+            # 将角色ID转换为小写以匹配枚举值
+            role_lower = role.lower()
 
-        # 设置玩家角色
-        player.role = Role(role_lower)
-        logger.info(f"玩家 {player_name} 选择角色: {role}")
+            # 检查角色是否有效
+            if role_lower not in Role.__members__.values():
+                logger.warning(f"无效的角色: {role}")
+                await connection_manager.send_to_player(
+                    player_name,
+                    {
+                        "type": "role_selection_error",
+                        "data": {"message": f"无效的角色: {role}"},
+                    },
+                )
+                return
 
-        # 广播角色选择
-        await connection_manager.broadcast_to_room(
-            room_id,
-            {
-                "type": MessageType.ROLE_SELECTED,
-                "data": {
-                    "selectedRoles": room.get_selected_roles(),
-                    "players": [
+            # 原子性角色冲突检查 - 在锁保护下进行
+            online_players = room.get_online_players()
+            for p in online_players:
+                if p.name != player_name and p.role == role_lower:
+                    logger.warning(f"角色 {role} 已被玩家 {p.name} 选择")
+                    await connection_manager.send_to_player(
+                        player_name,
                         {
-                            "name": p.name,
-                            "is_online": p.is_online,
-                            "role": p.role,
-                            "startup_idea": p.startup_idea,
-                            "isHost": p.is_host,
-                        }
-                        for p in room.players
-                    ],
+                            "type": "role_selection_error",
+                            "data": {"message": f"角色 {role.upper()} 已被其他玩家选择，请选择其他角色"},
+                        },
+                    )
+                    return
+
+            # 原子性设置玩家角色
+            try:
+                player.role = Role(role_lower)
+                logger.info(f"玩家 {player_name} 成功选择角色: {role}")
+            except Exception as e:
+                logger.error(f"设置玩家 {player_name} 角色失败: {str(e)}")
+                await connection_manager.send_to_player(
+                    player_name,
+                    {
+                        "type": "role_selection_error",
+                        "data": {"message": "角色设置失败，请重试"},
+                    },
+                )
+                return
+
+            # 广播角色选择成功
+            await connection_manager.broadcast_to_room(
+                room_id,
+                {
+                    "type": MessageType.ROLE_SELECTED,
+                    "data": {
+                        "selectedRoles": room.get_selected_roles(),
+                        "players": [
+                            {
+                                "name": p.name,
+                                "is_online": p.is_online,
+                                "role": p.role,
+                                "startup_idea": p.startup_idea,
+                                "isHost": p.is_host,
+                            }
+                            for p in room.players
+                        ],
+                    },
                 },
-            },
-        )
+            )
 
-        # 检查是否所有玩家都选择了角色
-        if room.all_players_have_roles():
-            logger.info(f"房间 {room_id} 所有角色已选择，直接开始游戏")
+            # 检查是否所有玩家都选择了角色
+            if room.all_players_have_roles():
+                logger.info(f"房间 {room_id} 所有角色已选择，直接开始游戏")
 
-            # 所有玩家选择完角色后，直接开始游戏
-            await GameHandler._auto_start_game_after_role_selection(room_id)
+                # 所有玩家选择完角色后，直接开始游戏
+                await GameHandler._auto_start_game_after_role_selection(room_id)
+            
+            logger.info(f"玩家 {player_name} 角色选择处理完成，释放房间 {room_id} 锁")
 
     @staticmethod
     async def _auto_start_game_after_role_selection(room_id: str):
