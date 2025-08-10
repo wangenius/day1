@@ -240,6 +240,9 @@ class GameRoom(BaseModel):
         # 填充prompt2模板
         prompt = prompt2_template.replace("{background}", self.background or "")
         
+        # 替换current_round占位符
+        prompt = prompt.replace("{current_round}", str(round_num))
+        
         # 替换initial_idea占位符
         # 从玩家的startup_idea中获取初始想法
         initial_ideas = [player.startup_idea for player in self.players if player.startup_idea]
