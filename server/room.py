@@ -203,6 +203,16 @@ class GameRoom(BaseModel):
 
         # 填充prompt模板
         prompt = prompt_template.replace("{initial_idea}", combined_ideas)
+        
+        # 生成玩家信息字符串
+        players_info = []
+        for player in self.players:
+            if player.is_online:
+                role_name = player.role.value if player.role else "未选择角色"
+                players_info.append(f"{player.name}({role_name})")
+        players_str = "、".join(players_info)
+        
+        prompt = prompt.replace("{players}", players_str)
 
         try:
             self.background = LLM().text(prompt, temperature=0.7)
