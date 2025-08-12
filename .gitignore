@@ -1,4 +1,4 @@
-.venv
-venv
-.env
-.env.example
+.cursor/
+.vercel/
+**/.env
+**/__pycache__
