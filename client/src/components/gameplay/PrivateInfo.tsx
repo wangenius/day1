@@ -30,11 +30,8 @@ export const PrivateInfo = ({
           <div className="text-zinc-800 text-base font-normal font-['Cactus_Classical_Serif'] text-center line-clamp-3">
             {privateMessages[String(playerRole).toUpperCase()]}
           </div>
-          <div className="absolute bottom-4 right-4 flex items-center gap-2">
-            <img className="w-6 h-6" src="./print.png" alt="印章" />
-            <div className="text-gray-200 text-sm font-normal transform -rotate-12">
-              秘
-            </div>
+          <div className="absolute bottom-4 right-4">
+            <img className="w-8 h-8" src="/src/assets/秘.png" alt="秘密标记" />
           </div>
         </div>
       </div>
