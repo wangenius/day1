@@ -9,7 +9,6 @@ from logger_config import logger
 # 加载.env文件
 load_dotenv()
 from openai.types.chat import ChatCompletionMessageParam
-# model = "qwen/qwen3-coder-480b-a35b-instruct"
 model = "moonshotai/kimi-k2-instruct"
 
 
@@ -63,7 +62,6 @@ class LLM:
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens,
             )
             logger.info(f"生成的结果:{response.choices[0].message.content}")
             return response.choices[0].message.content or ""
@@ -102,7 +100,6 @@ class LLM:
                     {"role": "user", "content": prompt},
                 ],
                 temperature=temperature,
-                max_tokens=max_tokens,
                 response_format={"type": "json_object"},
             )
 
@@ -169,7 +166,6 @@ class LLM:
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens,
             )
             return response.choices[0].message.content or ""
         except Exception as e:
