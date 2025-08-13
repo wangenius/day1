@@ -23,8 +23,8 @@ systemctl restart nginx.service
 cd
 cd "${_BACK_DIR}"
 git pull origin main
-python -m venv venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 python src/app.py
 
