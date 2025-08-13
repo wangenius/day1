@@ -42,7 +42,7 @@ export const PrivateInfo = ({
             <div className="absolute bottom-4 right-4">
               <img
                 className="w-8 h-8"
-                src="/src/assets/秘.png"
+                src="./秘.png"
                 alt="秘密标记"
               />
             </div>
