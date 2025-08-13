@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useGame } from "../context/GameContextCore";
+import type { Player } from "../const/const";
 
 /**
  * 当前视图类型
@@ -31,7 +32,7 @@ interface RoleInfo {
  * 显示玩家角色信息和过渡动画
  */
 function GameLoadingPage() {
-  const { playerName, roleDefinitions } = useGame();
+  const { playerName, roleDefinitions, players } = useGame();
   const [currentView, setCurrentView] = useState<CurrentView>("loading");
 
   /**
@@ -41,16 +42,18 @@ function GameLoadingPage() {
   const getCurrentPlayerRole = (): RoleInfo | null => {
     if (!roleDefinitions || !playerName) return null;
 
-    // 查找当前玩家选择的角色
-    const roles = ["CEO", "CTO", "CMO", "COO"];
-    for (const roleId of roles) {
-      if (roleDefinitions[roleId]) {
-        return {
-          id: roleId,
-          name: roleDefinitions[roleId].name || roleId,
-          description: roleDefinitions[roleId].description || "",
-        };
-      }
+    // 从players数组中找到当前玩家
+    const currentPlayer = players.find((player: Player) => player.name === playerName);
+    if (!currentPlayer || !currentPlayer.role) return null;
+
+    // 根据玩家选择的角色ID获取角色信息
+    const roleId = currentPlayer.role;
+    if (roleDefinitions[roleId]) {
+      return {
+        id: roleId,
+        name: roleDefinitions[roleId].name || roleId,
+        description: roleDefinitions[roleId].description || "",
+      };
     }
     return null;
   };
@@ -95,11 +98,11 @@ function GameLoadingPage() {
 
       {/* 主要内容容器 */}
       <div className="w-full max-w-sm mx-auto flex flex-col items-center space-y-6">
-        {/* CEO角色图片 */}
+        {/* 角色图片 */}
         <img
           className="w-full max-w-xs h-48 object-cover rounded-lg"
-          src="/CEO.png"
-          alt="CEO角色"
+          src={`/${currentRole?.id || 'CEO'}.png`}
+          alt={`${currentRole?.name || 'CEO'}角色`}
         />
 
         {/* 游戏规则说明 */}

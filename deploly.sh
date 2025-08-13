@@ -23,8 +23,10 @@ systemctl restart nginx.service
 cd
 cd "${_BACK_DIR}"
 git pull origin main
-python -m venv .venv
-source .venv/bin/activate
+
+
+# 激活conda环境并安装依赖
+conda activate startup_mod
 pip install -r requirements.txt
 python src/app.py
 
