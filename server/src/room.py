@@ -206,7 +206,7 @@ class GameRoom(BaseModel):
 
         # 填充prompt模板
         prompt = prompt_template.replace("{initial_idea}", combined_ideas)
-        
+
         # 生成玩家信息字符串
         players_info = []
         for player in self.players:
@@ -214,7 +214,7 @@ class GameRoom(BaseModel):
                 role_name = player.role.value if player.role else "未选择角色"
                 players_info.append(f"{player.name}({role_name})")
         players_str = "、".join(players_info)
-        
+
         prompt = prompt.replace("{players}", players_str)
 
         try:
@@ -242,97 +242,230 @@ class GameRoom(BaseModel):
     def generate_event(self, round_num):
         # 填充prompt2模板
         prompt = prompt2_template.replace("{background}", self.background or "")
-        
+
         # 替换current_round占位符
         prompt = prompt.replace("{current_round}", str(round_num))
-        
-        # 替换initial_idea占位符
-        # 从玩家的startup_idea中获取初始想法
-        initial_ideas = [player.startup_idea for player in self.players if player.startup_idea]
-        combined_ideas = "\n".join([f"- {idea}" for idea in initial_ideas]) if initial_ideas else "创业想法"
-        prompt = prompt.replace("{initial_idea}", combined_ideas)
-        
-        # 替换situation/previous_output占位符
-        if round_num in self.round_situation:
-            # 如果round_situation是字典，需要转换为字符串
-            situation_data = self.round_situation[round_num]
-            if isinstance(situation_data, dict):
-                situation_str = f"第{situation_data.get('round', round_num-1)}轮的决策结果：{situation_data.get('impact', '上一轮的决策产生了影响...')}"
-            else:
-                situation_str = str(situation_data)
-            prompt = prompt.replace("{situation}", situation_str)
-            prompt = prompt.replace("{previous_output}", situation_str)
-        else:
-            default_situation = "这是第一轮决策，暂无上一轮结果"
-            prompt = prompt.replace("{situation}", default_situation)
-            prompt = prompt.replace("{previous_output}", default_situation)
+
+        # 替换 previous_experience：给到完整的历史事件与结果
+        previous_experience = self._build_previous_experience(round_num)
+        if not previous_experience:
+            previous_experience = "暂无之前经历"
+        prompt = prompt.replace("{previous_experience}", previous_experience)
 
         # 添加重试机制，最多重试3次
         max_retries = 3
         for attempt in range(max_retries):
             try:
                 response_json = LLM().json(prompt, temperature=0.7)
-                
+
                 # 添加调试信息
                 print(f"本轮事件的信息: {response_json}")
-                
+
                 # 验证返回的JSON结构
                 if not self._validate_event_response(response_json):
                     raise ValueError("返回的JSON结构不完整")
-                
+
                 # 返回完整的事件数据，包含私人信息
                 return {
                     "situation": response_json.get("situation", ""),
                     "event": response_json.get("event", ""),
                     "private_messages": response_json.get("private_messages", {}),
-                    "is_default_event": False  # 标记这是AI生成的事件
+                    "is_default_event": False,  # 标记这是AI生成的事件
                 }
             except Exception as e:
-                logger.error(f"第{attempt + 1}次尝试生成第{round_num}轮事件失败: {str(e)}")
+                logger.error(
+                    f"第{attempt + 1}次尝试生成第{round_num}轮事件失败: {str(e)}"
+                )
                 if attempt == max_retries - 1:
                     # 最后一次重试失败，返回默认事件
                     logger.error(f"生成第{round_num}轮事件彻底失败，使用默认事件")
                     return self._get_default_event(round_num)
                 # 稍微调整temperature重试
-                prompt = prompt.replace("temperature=0.7", f"temperature={0.5 + attempt * 0.1}")
-        
+                prompt = prompt.replace(
+                    "temperature=0.7", f"temperature={0.5 + attempt * 0.1}"
+                )
+
         # 兜底返回默认事件
         return self._get_default_event(round_num)
-    
+
+    def _build_history_summary(self, up_to_round: int) -> str:
+        """汇总从第1轮到 up_to_round-1 的经历（情况、事件、玩家决策）。"""
+        if up_to_round <= 1:
+            return ""
+        parts = []
+        for r in range(1, up_to_round):
+            round_parts = []
+            # 情况/分析
+            if r in self.round_situation:
+                situation_data = self.round_situation[r]
+                if isinstance(situation_data, dict):
+                    situation = situation_data.get("impact", str(situation_data))
+                else:
+                    situation = str(situation_data)
+                round_parts.append(f"第{r}轮情况：{situation}")
+            # 事件（标题+描述）
+            if r in self.round_events:
+                event_obj = self.round_events[r]
+                if isinstance(event_obj, dict):
+                    title = event_obj.get("event_title") or event_obj.get("title") or ""
+                    desc = (
+                        event_obj.get("event_description")
+                        or event_obj.get("description")
+                        or ""
+                    )
+                    event_text = f"{title} - {desc}".strip(" -")
+                else:
+                    event_text = str(event_obj)
+                round_parts.append(f"事件：{event_text}")
+            # 玩家决策
+            if r in self.round_actions and self.round_actions[r]:
+                actions = self.round_actions[r]
+
+                def role_to_str(val):
+                    try:
+                        return val.value if hasattr(val, "value") else str(val)
+                    except Exception:
+                        return str(val)
+
+                action_lines = [
+                    f"{a.get('playerName') or a.get('player')}({role_to_str(a.get('role', ''))})：{a.get('action', '')}"
+                    for a in actions
+                ]
+                round_parts.append("玩家决策：\n" + "\n".join(action_lines))
+            if round_parts:
+                parts.append("\n".join(round_parts))
+        return "\n\n".join(parts)
+
+    def _build_previous_experience(self, up_to_round: int) -> str:
+        """构建 previous_experience：从第1轮到 up_to_round-1，逐轮给到事件与结果。
+
+        事件：来自 round_events[r]
+        结果：优先取 round_situation[r+1]（上一轮选择带来的影响通常在下一轮形成），
+             其次回退到 round_situation[r]，否则标记为暂无结果。
+        """
+        if up_to_round <= 1:
+            return ""
+
+        parts: List[str] = []
+        for r in range(1, up_to_round):
+            # 事件文本
+            event_text = "暂无事件"
+            if r in self.round_events:
+                event_obj = self.round_events[r]
+                if isinstance(event_obj, dict):
+                    title = event_obj.get("event_title") or event_obj.get("title") or ""
+                    desc = (
+                        event_obj.get("event_description")
+                        or event_obj.get("description")
+                        or ""
+                    )
+                    event_text = f"{title} - {desc}".strip(" -")
+                else:
+                    event_text = str(event_obj)
+
+            # 结果文本：优先 r+1，再退回 r
+            def _normalize_situation(val) -> str:
+                if val is None:
+                    return ""
+                if isinstance(val, dict):
+                    return val.get("impact", str(val))
+                return str(val)
+
+            if (r + 1) in self.round_situation:
+                result_text = _normalize_situation(self.round_situation[r + 1])
+            elif r in self.round_situation:
+                result_text = _normalize_situation(self.round_situation[r])
+            else:
+                result_text = "暂无结果"
+
+            parts.append(f"第{r}轮事件：{event_text}\n第{r}轮结果：{result_text}")
+
+        return "\n\n".join(parts)
+
+    def generate_round_analysis(self, current_round: int) -> str:
+        """使用prompt3对上一轮的事件与选择进行分析，产出文本存入round_situation[current_round]。"""
+        if current_round <= 1:
+            # 第一轮之前没有上一轮，返回空
+            self.round_situation[current_round] = ""
+            return ""
+        prev_round = current_round - 1
+        # 构造 prompt3 内容
+        # previous_experience: 只包含 prev_round 之前的完整经历（事件+结果）
+        previous_experience = self._build_previous_experience(prev_round)
+        # 事件文本
+        event_text = ""
+        if prev_round in self.round_events:
+            e = self.round_events[prev_round]
+            if isinstance(e, dict):
+                title = e.get("event_title") or e.get("title") or ""
+                desc = e.get("event_description") or e.get("description") or ""
+                event_text = f"{title} - {desc}".strip(" -")
+            else:
+                event_text = str(e)
+
+        # 各角色选择
+        def get_choice(role_enum):
+            actions = self.round_actions.get(prev_round, [])
+            for a in actions:
+                if a.get("role") == role_enum:
+                    return a.get("action") or ""
+            return "未提交"
+
+        ceo_choice = get_choice(Role.CEO)
+        cto_choice = get_choice(Role.CTO)
+        coo_choice = get_choice(Role.COO)
+        cmo_choice = get_choice(Role.CMO)
+        prompt = prompt3_template
+        prompt = prompt.replace("{background}", self.background or "")
+        prompt = prompt.replace("{previous_experience}", previous_experience or "")
+        prompt = prompt.replace("{event}", event_text)
+        prompt = prompt.replace("{ceo_choice}", ceo_choice)
+        prompt = prompt.replace("{cto_choice}", cto_choice)
+        prompt = prompt.replace("{coo_choice}", coo_choice)
+        prompt = prompt.replace("{cmo_choice}", cmo_choice)
+        try:
+            analysis_text = LLM().text(prompt, temperature=0.7)
+        except Exception as e:
+            analysis_text = (
+                f"第{prev_round}轮选择产生的影响：数据不足或生成失败（{e}）。"
+            )
+        self.round_situation[current_round] = analysis_text
+        return analysis_text
+
     def _validate_event_response(self, response_json):
         """验证事件响应的JSON结构"""
         if not isinstance(response_json, dict):
             return False
-        
+
         # 检查必需的字段
         required_fields = ["event", "private_messages"]
         for field in required_fields:
             if field not in response_json:
                 return False
-        
+
         # 检查event字段结构
         event = response_json.get("event", {})
         if not isinstance(event, dict):
             return False
-        
+
         event_required_fields = ["event_title", "event_description", "decision_options"]
         for field in event_required_fields:
             if field not in event:
                 return False
-        
+
         # 检查private_messages字段结构
         private_messages = response_json.get("private_messages", {})
         if not isinstance(private_messages, dict):
             return False
-        
+
         # 检查是否包含所有角色的私信
         required_roles = ["CEO", "CTO", "CMO", "COO"]
         for role in required_roles:
             if role not in private_messages:
                 return False
-        
+
         return True
-    
+
     def _get_default_event(self, round_num):
         """获取默认事件（当AI生成失败时使用）"""
         default_events = {
@@ -342,8 +475,8 @@ class GameRoom(BaseModel):
                 "decision_options": {
                     "A": "立即制定详细的工作分工和流程规范",
                     "B": "保持灵活性，根据实际情况逐步调整",
-                    "C": "优先建立团队文化和价值观共识"
-                }
+                    "C": "优先建立团队文化和价值观共识",
+                },
             },
             2: {
                 "event_title": "产品开发方向",
@@ -351,8 +484,8 @@ class GameRoom(BaseModel):
                 "decision_options": {
                     "A": "专注核心功能，快速打造MVP版本",
                     "B": "全面开发，确保产品功能完整",
-                    "C": "重点研发创新技术，追求技术突破"
-                }
+                    "C": "重点研发创新技术，追求技术突破",
+                },
             },
             3: {
                 "event_title": "市场进入策略",
@@ -360,8 +493,8 @@ class GameRoom(BaseModel):
                 "decision_options": {
                     "A": "大规模营销推广，快速占领市场",
                     "B": "精准定位目标用户，稳步推进",
-                    "C": "先在小范围测试，收集反馈后调整"
-                }
+                    "C": "先在小范围测试，收集反馈后调整",
+                },
             },
             4: {
                 "event_title": "融资决策",
@@ -369,8 +502,8 @@ class GameRoom(BaseModel):
                 "decision_options": {
                     "A": "积极寻求风险投资，加速发展",
                     "B": "保持自主发展，控制股权稀释",
-                    "C": "寻找战略投资者，获得资源支持"
-                }
+                    "C": "寻找战略投资者，获得资源支持",
+                },
             },
             5: {
                 "event_title": "规模化挑战",
@@ -378,27 +511,27 @@ class GameRoom(BaseModel):
                 "decision_options": {
                     "A": "大力扩张团队和业务规模",
                     "B": "优化现有流程，提高运营效率",
-                    "C": "多元化发展，拓展新的业务线"
-                }
-            }
+                    "C": "多元化发展，拓展新的业务线",
+                },
+            },
         }
-        
+
         # 如果轮次超出预定义范围，使用最后一个事件模板
         event_data = default_events.get(round_num, default_events[5])
-        
+
         # 生成默认私信
         default_private_messages = {
             "CEO": f"第{round_num}轮：作为CEO，你需要权衡各方利益，做出最终决策。",
             "CTO": f"第{round_num}轮：从技术角度分析，每个选项都有其技术可行性和风险。",
             "CMO": f"第{round_num}轮：市场竞争激烈，需要考虑用户反应和品牌影响。",
-            "COO": f"第{round_num}轮：运营成本和效率是关键考虑因素。"
+            "COO": f"第{round_num}轮：运营成本和效率是关键考虑因素。",
         }
-        
+
         return {
             "situation": f"第{round_num}轮：公司发展进入新阶段，面临重要决策。",
             "event": event_data,
             "private_messages": default_private_messages,
-            "is_default_event": True  # 标记这是默认事件
+            "is_default_event": True,  # 标记这是默认事件
         }
 
     def calculate_game_result(self) -> Dict:
@@ -505,53 +638,77 @@ class GameRoom(BaseModel):
 
     def generate_final_report(self) -> str:
         """使用prompt4模板生成最终的创业报告"""
-        # 获取初始创业想法
-        initial_ideas = [player.startup_idea for player in self.players if player.startup_idea]
-        combined_ideas = "\n".join([f"- {idea}" for idea in initial_ideas]) if initial_ideas else "创业想法"
-        
         # 获取每轮的分析结果
         round_outputs = []
         for round_num in range(1, 6):
             round_output_parts = []
-            
-            # 获取轮次情况
-            if round_num in self.round_situation:
-                situation_data = self.round_situation[round_num]
-                if isinstance(situation_data, dict):
-                    situation = situation_data.get('impact', '上一轮的决策产生了影响...')
-                else:
-                    situation = str(situation_data)
+
+            # 优先使用存储的轮次分析/情况
+            if round_num in self.round_situation and self.round_situation[round_num]:
+                situation = self.round_situation[round_num]
+                if isinstance(situation, dict):
+                    situation = situation.get("impact", str(situation))
                 round_output_parts.append(f"第{round_num}轮情况：{situation}")
-            
+
             # 获取轮次事件
             if round_num in self.round_events:
                 event_data = self.round_events[round_num]
-                # round_events存储的是事件对象，可能包含description等字段
+                # 事件对象兼容处理
                 if isinstance(event_data, dict):
-                    event_desc = event_data.get('description', '') or str(event_data)
+                    title = (
+                        event_data.get("event_title") or event_data.get("title") or ""
+                    )
+                    desc = (
+                        event_data.get("event_description")
+                        or event_data.get("description")
+                        or ""
+                    )
+                    event_desc = f"{title} - {desc}".strip(" -")
                 else:
                     event_desc = str(event_data)
                 round_output_parts.append(f"事件：{event_desc}")
-            
+
             # 添加该轮的玩家行动
             if round_num in self.round_actions:
                 actions = self.round_actions[round_num]
-                action_summary = "\n".join([f"{action.get('player')}({action.get('role', '')})：{action.get('action', '')}" for action in actions])
+
+                def role_to_str(val):
+                    try:
+                        return val.value if hasattr(val, "value") else str(val)
+                    except Exception:
+                        return str(val)
+
+                action_summary = "\n".join(
+                    [
+                        f"{a.get('playerName') or a.get('player')}({role_to_str(a.get('role', ''))})：{a.get('action', '')}"
+                        for a in actions
+                    ]
+                )
                 round_output_parts.append(f"玩家决策：\n{action_summary}")
-            
+
             if round_output_parts:
                 round_outputs.append("\n".join(round_output_parts))
             else:
                 round_outputs.append(f"第{round_num}轮：暂无数据")
-        
+
         # 填充prompt4模板
-        prompt = prompt4_template.replace("{initial_idea}", combined_ideas)
-        prompt = prompt.replace("{output1}", round_outputs[0] if len(round_outputs) > 0 else "暂无数据")
-        prompt = prompt.replace("{output2}", round_outputs[1] if len(round_outputs) > 1 else "暂无数据")
-        prompt = prompt.replace("{output3}", round_outputs[2] if len(round_outputs) > 2 else "暂无数据")
-        prompt = prompt.replace("{output4}", round_outputs[3] if len(round_outputs) > 3 else "暂无数据")
-        prompt = prompt.replace("{output5}", round_outputs[4] if len(round_outputs) > 4 else "暂无数据")
-        
+        prompt = prompt4_template.replace("{background}", self.background or "")
+        prompt = prompt.replace(
+            "{output1}", round_outputs[0] if len(round_outputs) > 0 else "暂无数据"
+        )
+        prompt = prompt.replace(
+            "{output2}", round_outputs[1] if len(round_outputs) > 1 else "暂无数据"
+        )
+        prompt = prompt.replace(
+            "{output3}", round_outputs[2] if len(round_outputs) > 2 else "暂无数据"
+        )
+        prompt = prompt.replace(
+            "{output4}", round_outputs[3] if len(round_outputs) > 3 else "暂无数据"
+        )
+        prompt = prompt.replace(
+            "{output5}", round_outputs[4] if len(round_outputs) > 4 else "暂无数据"
+        )
+
         # 替换玩家姓名占位符
         # 首先替换CEO的姓名
         ceo_player = None
@@ -559,18 +716,29 @@ class GameRoom(BaseModel):
             if player.role == Role.CEO:
                 ceo_player = player
                 break
-        
+
         if ceo_player:
             # 替换CEO部分的[玩家姓名]
-            prompt = prompt.replace("CEO/Founder：[玩家姓名]", f"CEO/Founder：{ceo_player.name}")
-        
+            prompt = prompt.replace(
+                "CEO/Founder：[玩家姓名]", f"CEO/Founder：{ceo_player.name}"
+            )
+
         # 替换其他角色的玩家姓名
         role_mapping = {Role.CTO: "CTO", Role.CMO: "CMO", Role.COO: "COO"}
         for player in self.players:
             if player.role and player.role in role_mapping:
                 role_name = role_mapping[player.role]
-                prompt = prompt.replace(f"{role_name}：[玩家姓名]", f"{role_name}：{player.name}")
-        
+                prompt = prompt.replace(
+                    f"{role_name}：[玩家姓名]", f"{role_name}：{player.name}"
+                )
+
+        # 替换整体的 previous_experience（覆盖五轮）：事件 + 结果
+        # 这里 up_to_round 取 6，尽可能包含到第5轮后的结果；若不存在则函数内部会优雅降级
+        overall_previous_experience = self._build_previous_experience(6)
+        if not overall_previous_experience:
+            overall_previous_experience = "暂无之前经历"
+        prompt = prompt.replace("{previous_experience}", overall_previous_experience)
+
         try:
             final_report = LLM().text(prompt, temperature=0.7)
             return final_report

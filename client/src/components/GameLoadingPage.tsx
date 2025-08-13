@@ -181,7 +181,6 @@ function GameLoadingPage() {
 function Video1({ onEnded }: Video1Props) {
   return (
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden relative flex flex-col">
-      {/* 视频 */}
       <video
         className="w-full flex-1 object-cover"
         src="/first scene.mp4"

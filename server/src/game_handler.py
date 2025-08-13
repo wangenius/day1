@@ -576,7 +576,18 @@ class GameHandler:
                 "data": {"message": "AI正在分析游戏结果，请稍候..."},
             },
         )
-        
+        # 在计算结果前，补充最后一轮的经历分析（基于上一轮的事件与选择）
+        try:
+            if room.current_round >= 1 and not room.round_situation.get(room.current_round):
+                analysis_text = await asyncio.get_event_loop().run_in_executor(
+                    None, room.generate_round_analysis, room.current_round + 1
+                )
+                # 将分析写回到当前轮次的键位，便于报告读取
+                if analysis_text:
+                    room.round_situation[room.current_round] = analysis_text
+        except Exception as e:
+            logger.error(f"房间 {room_id} 最后一轮经历分析生成失败: {e}")
+
         # 计算游戏结果
         room.game_state = GameState.FINISHED
         room.game_result = room.calculate_game_result()
@@ -609,16 +620,14 @@ class GameHandler:
         )
 
         # 生成当前轮次的事件
-        # 设置之前的输出用于生成连贯的事件
+        # 基于上一轮事件与选择，生成“经历分析”（用于prompt2/4）
         if room.current_round > 1:
-            previous_round = room.current_round - 1
-            if previous_round in room.round_actions:
-                room.round_situation[room.current_round] = {
-                    "round": previous_round,
-                    "players_choices": {},  # 这里可以根据实际行动数据构建
-                    "final_choice": 1,  # 简化处理
-                    "impact": "上一轮的决策产生了影响...",
-                }
+            try:
+                await asyncio.get_event_loop().run_in_executor(
+                    None, room.generate_round_analysis, room.current_round
+                )
+            except Exception as e:
+                logger.error(f"房间 {room_id} 生成第{room.current_round-1}轮经历分析失败: {e}")
 
         # 调用房间的generate_event方法，该方法已经包含了重试机制和默认事件处理
         event_data = await asyncio.get_event_loop().run_in_executor(
