@@ -1,5 +1,6 @@
 import { Button } from "../Button";
 import { PlayerStatusCard } from "./PlayerStatusCard";
+import { PrivateInfo } from "./PrivateInfo";
 
 interface SelectionProps {
   playerName: string;
@@ -124,37 +125,11 @@ export const Selection = ({
 
       {/* 私人信息 - 全宽度，用户头像在右上角 */}
       {privateMessages && privateMessages[String(playerRole).toUpperCase()] && (
-        <div className="px-4 mb-6 relative">
-          <div
-            className="relative cursor-pointer hover:scale-105 transition-transform duration-200 max-w-sm mx-auto"
-            onClick={onShowPrivateModal}
-          >
-            <img className="w-full h-40" src="./paper.png" alt="私人信息" />
-            <div className="absolute inset-0 flex flex-col justify-center items-start px-6 py-4">
-              {/* 顶部提示文字 */}
-              <div className="opacity-60 text-neutral-600 text-xs font-normal font-['Cactus_Classical_Serif'] uppercase leading-none mb-2 text-start">
-                仅你可见，点击可以展开
-              </div>
-
-              {/* 主要内容区域 */}
-              <div className="flex-1 flex items-center justify-center w-full">
-                <div className="text-center text-zinc-800 text-md font-normal font-['Cactus_Classical_Serif'] [text-shadow:_1px_1px_2px_rgb(142_142_142_/_0.25)] leading-relaxed max-w-full overflow-hidden">
-                  <div className="line-clamp-4 px-1">
-                    {privateMessages[String(playerRole).toUpperCase()]}
-                  </div>
-                </div>
-              </div>
-
-              {/* 底部印章区域 - 确保不与内容重叠 */}
-              <div className="absolute bottom-3 right-3 flex items-center">
-                <img className="w-5 h-5" src="./print.png" alt="印章" />
-                <div className="ml-1 text-gray-200 text-xs font-normal font-['FZLanTingHeiS-H-GB'] [text-shadow:_1px_1px_1px_rgb(103_43_43_/_0.57)]">
-                  秘
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PrivateInfo
+          privateMessages={privateMessages}
+          playerRole={playerRole}
+          onShowPrivateModal={onShowPrivateModal}
+        />
       )}
 
       {/* 选择提示 */}
