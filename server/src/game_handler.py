@@ -534,7 +534,13 @@ class GameHandler:
             f"玩家 {player_name} 提交第{room.current_round}轮行动: {action['action']}"
         )
 
-        # 广播行动提交
+        # 第五轮：提交后直接进入结算加载，不再显示“等待其他玩家”
+        if room.current_round >= 5:
+            logger.info(f"房间 {room_id} 第{room.current_round}轮为最终轮，直接进入结算")
+            await GameHandler._handle_game_complete(room_id, room)
+            return
+
+        # 非最终轮：正常广播提交状态并在全部提交后进入下一轮
         await connection_manager.broadcast_to_room(
             room_id,
             {
@@ -548,7 +554,6 @@ class GameHandler:
             },
         )
 
-        # 检查是否所有玩家都提交了行动
         if room.all_players_submitted_actions(room.current_round):
             await GameHandler._handle_round_complete(room_id, room)
 
@@ -567,7 +572,7 @@ class GameHandler:
     @staticmethod
     async def _handle_game_complete(room_id: str, room: GameRoom):
         """处理游戏完成"""
-        # 先广播游戏结果计算中的Loading状态
+        # 先广播游戏结果计算中的Loading状态（使用通用加载，前端展示GameLoadingPage）
         room.game_state = GameState.LOADING
         await connection_manager.broadcast_to_room(
             room_id,
