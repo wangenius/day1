@@ -2,7 +2,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 import json
 import logging
 
-from room import Player, MessageType
+from room import  MessageType
 from connection_manager import connection_manager
 from room_manager import room_manager
 from game_handler import game_handler
