@@ -65,7 +65,7 @@ class WebSocketHandler:
                                 {
                                     "name": p.name,
                                     "is_online": p.is_online,
-                                    "role": p.role,
+                                    "role": p.role.value if p.role else None,
                                     "startup_idea": p.startup_idea,
                                     "isHost": p.is_host,
                                 }
@@ -86,7 +86,7 @@ class WebSocketHandler:
                                 {
                                     "name": p.name,
                                     "is_online": p.is_online,
-                                    "role": p.role,
+                                    "role": p.role.value if p.role else None,
                                     "startup_idea": p.startup_idea,
                                     "isHost": p.is_host,
                                 }
@@ -120,7 +120,7 @@ class WebSocketHandler:
                         {
                             "name": p.name,
                             "is_online": p.is_online,
-                            "role": p.role,
+                            "role": p.role.value if p.role else None,
                             "startup_idea": p.startup_idea,
                             "isHost": p.is_host,
                         }
@@ -234,7 +234,7 @@ class WebSocketHandler:
                                     {
                                         "name": p.name,
                                         "is_online": p.is_online,
-                                        "role": p.role,
+                                        "role": p.role.value if p.role else None,
                                         "startup_idea": p.startup_idea,
                                         "isHost": p.is_host,
                                     }

@@ -60,12 +60,12 @@ function RoundResult({
     if (!role) return '👤';
     
     const icons: RoleIconMap = {
-      'ceo': '👔',
-      'cto': '💻', 
-      'cmo': '📈',
-      'coo': '⚙️'
+      'CEO': '👔',
+      'CTO': '💻', 
+      'CMO': '📈',
+      'COO': '⚙️'
     };
-    return icons[role.toLowerCase()] || '👤';
+    return icons[role] || '👤';
   };
 
   /**

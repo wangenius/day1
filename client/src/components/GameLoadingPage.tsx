@@ -35,12 +35,18 @@ function GameLoadingPage() {
   const { playerName, roleDefinitions, players } = useGame();
   const [currentView, setCurrentView] = useState<CurrentView>("loading");
 
+  // 添加调试日志
+  console.log("GameLoadingPage - playerName:", playerName);
+  console.log("GameLoadingPage - roleDefinitions:", roleDefinitions);
+  console.log("GameLoadingPage - players:", players);
+  console.log("GameLoadingPage - players详细:", JSON.stringify(players, null, 2));
+
   /**
    * 获取当前玩家的角色信息
    * @returns 角色信息或null
    */
   const getCurrentPlayerRole = (): RoleInfo | null => {
-    if (!roleDefinitions || !playerName) return null;
+    if (!playerName) return null;
 
     // 从players数组中找到当前玩家
     const currentPlayer = players.find((player: Player) => player.name === playerName);
@@ -48,18 +54,32 @@ function GameLoadingPage() {
 
     // 根据玩家选择的角色ID获取角色信息
     const roleId = currentPlayer.role;
-    if (roleDefinitions[roleId]) {
+    console.log("当前玩家角色ID:", roleId);
+    console.log("角色定义:", roleDefinitions);
+
+    // 若有角色定义，优先返回定义内容；否则使用基础回退信息
+    if (roleDefinitions && roleDefinitions[roleId]) {
       return {
         id: roleId,
         name: roleDefinitions[roleId].name || roleId,
         description: roleDefinitions[roleId].description || "",
       };
     }
-    return null;
+
+    // 回退：在角色定义尚未下发时，使用角色ID作为展示名
+    return {
+      id: roleId,
+      name: roleId,
+      description: "",
+    };
   };
 
   const currentRole = getCurrentPlayerRole();
   const roleName = currentRole ? currentRole.name : playerName;
+  
+  // 添加调试日志
+  console.log("GameLoadingPage - currentRole:", currentRole);
+  console.log("GameLoadingPage - roleName:", roleName);
 
   useEffect(() => {
     // 2秒后切换到video1

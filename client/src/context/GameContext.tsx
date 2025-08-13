@@ -279,33 +279,44 @@ export function GameProvider({ children }: GameProviderProps) {
         break;
       // 游戏开始，进入角色选择
       case "game_start": {
+        console.log("GameContext - 收到game_start消息:", message);
         setGameState(GAME_STATES.ROLE_SELECTION);
         saveGameState(playerName, currentRoom, GAME_STATES.ROLE_SELECTION);
         // 设置游戏背景故事
         if (message.data && message.data.background) {
+          console.log("GameContext - 设置背景故事:", message.data.background);
           setGameBackground(message.data.background as string);
         }
         // 设置角色定义
         if (message.data && message.data.roles) {
+          console.log("GameContext - 设置角色定义:", message.data.roles);
           setRoleDefinitions(message.data.roles as Record<string, RoleDefinition>);
+        } else {
+          console.log("GameContext - 没有角色定义数据");
         }
         addMessage("🚀 游戏开始，请选择角色");
         break;
       }
       // 过渡动画阶段
       case "transition_animation":
+        console.log("GameContext - 收到transition_animation消息:", message);
         setGameState(GAME_STATES.EVENT_GENERATION);
         saveGameState(playerName, currentRoom, GAME_STATES.EVENT_GENERATION);
         if (message.data && message.data.background) {
+          console.log("GameContext - 设置背景故事:", message.data.background);
           setGameBackground(message.data.background as string);
         }
         if (message.data && message.data.roles) {
+          console.log("GameContext - 设置角色定义:", message.data.roles);
           setRoleDefinitions(message.data.roles as Record<string, RoleDefinition>);
+        } else {
+          console.log("GameContext - 没有角色定义数据");
         }
         addMessage("🎬 进入过渡动画，准备开始游戏");
         break;
       // 有玩家选择了角色
       case "role_selected":
+        console.log("GameContext - 收到role_selected消息:", message);
         setSelectedRoles(message.data.selectedRoles as string[]);
         setPlayers(message.data.players as Player[]);
         break;
@@ -700,13 +711,34 @@ export function GameProvider({ children }: GameProviderProps) {
    * @param roleId - 选择的角色ID
    */
   const handleRoleSelect = (roleId: string): void => {
+    console.log("GameContext handleRoleSelect - 开始执行，角色ID:", roleId);
+    console.log("GameContext handleRoleSelect - wsConnected:", wsConnected);
+    
+    // 立即更新本地玩家状态，提供即时反馈
+    setPlayers(prevPlayers => 
+      prevPlayers.map(player => 
+        player.name === playerName 
+          ? { ...player, role: roleId }
+          : player
+      )
+    );
+    
+    // 更新已选择的角色列表
+    setSelectedRoles(prevRoles => {
+      const newRoles = [...prevRoles, roleId];
+      console.log("GameContext handleRoleSelect - 更新selectedRoles:", newRoles);
+      return newRoles;
+    });
+    
     if (wsRef.current && wsConnected) {
-      wsRef.current.send(
-        JSON.stringify({
-          type: "select_role",
-          data: { role: roleId },
-        })
-      );
+      const message = {
+        type: "select_role",
+        data: { role: roleId },
+      };
+      console.log("GameContext handleRoleSelect - 发送消息:", message);
+      wsRef.current.send(JSON.stringify(message));
+    } else {
+      console.error("GameContext handleRoleSelect - WebSocket未连接");
     }
   };
 

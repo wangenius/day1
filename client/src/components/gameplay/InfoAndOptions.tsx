@@ -1,5 +1,5 @@
-import { PlayerInfo } from './PlayerInfo';
-import { PrivateInfo } from './PrivateInfo';
+import { PlayerInfo } from "./PlayerInfo";
+import { PrivateInfo } from "./PrivateInfo";
 
 interface InfoAndOptionsProps {
   playerName: string;
@@ -25,7 +25,7 @@ export const InfoAndOptions = ({
   getRoleImage,
   onShowEventModal,
   onShowPrivateModal,
-  onGoToSelection
+  onGoToSelection,
 }: InfoAndOptionsProps) => {
   return (
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col p-4">
@@ -88,10 +88,6 @@ export const InfoAndOptions = ({
           className="cursor-pointer flex flex-col items-center gap-2 hover:opacity-80 transition-opacity"
           onClick={onGoToSelection}
         >
-          <div className="w-10 h-10 bg-zinc-900 rounded-lg border border-stone-500 flex items-center justify-center">
-            <div className="w-4 h-3 bg-gray-200 rounded-sm" />
-            <div className="w-1.5 h-1.5 bg-gray-200 rounded-full ml-1" />
-          </div>
           <div className="text-white/70 text-base font-normal font-['Cactus_Classical_Serif']">
             进入讨论
           </div>

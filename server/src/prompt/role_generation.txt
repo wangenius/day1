@@ -19,19 +19,19 @@
 
 ```json
 {
-  "ceo": {
+  "CEO": {
     "name": "首席执行官 (CEO)",
     "description": "[基于背景的个性化描述]"
   },
-  "cto": {
+  "CTO": {
     "name": "首席技术官 (CTO)", 
     "description": "[基于背景的个性化描述]"
   },
-  "cmo": {
+  "CMO": {
     "name": "首席营销官 (CMO)",
     "description": "[基于背景的个性化描述]"
   },
-  "coo": {
+  "COO": {
     "name": "首席运营官 (COO)",
     "description": "[基于背景的个性化描述]"
   }

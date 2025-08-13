@@ -12,16 +12,26 @@ function RoleSelection() {
 
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
 
+  // 添加调试日志
+  console.log("RoleSelection - players:", players);
+  console.log("RoleSelection - playerName:", playerName);
+  console.log("RoleSelection - selectedRoles:", selectedRoles);
+  console.log("RoleSelection - selectedRole (local):", selectedRole);
+
   /**
    * 处理角色选择
    * @param roleId - 角色ID
    */
   const handleRoleSelectClick = (roleId: string): void => {
-    // 更严格的前端检查
-    const roleIdLower = roleId.toLowerCase();
+    console.log("handleRoleSelectClick - 开始执行，角色ID:", roleId);
+    console.log("handleRoleSelectClick - selectedRoles:", selectedRoles);
+    console.log("handleRoleSelectClick - selectedRole (local):", selectedRole);
+    console.log("handleRoleSelectClick - currentPlayer:", currentPlayer);
+    
+    // 更严格的前端检查 - 使用原始角色ID，因为后端现在返回大写值
     
     // 检查角色是否已被选择
-    if (selectedRoles.includes(roleIdLower)) {
+    if (selectedRoles.includes(roleId)) {
       console.warn(`角色 ${roleId} 已被其他玩家选择`);
       return;
     }
@@ -32,6 +42,7 @@ function RoleSelection() {
       return;
     }
 
+    console.log("handleRoleSelectClick - 设置本地状态并发送请求");
     // 设置本地状态并发送请求
     setSelectedRole(roleId);
     handleRoleSelect(roleId);

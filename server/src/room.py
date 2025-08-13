@@ -77,10 +77,10 @@ class GameState(str, Enum):
 
 
 class Role(str, Enum):
-    CEO = "ceo"
-    CTO = "cto"
-    CMO = "cmo"
-    COO = "coo"
+    CEO = "CEO"
+    CTO = "CTO"
+    CMO = "CMO"
+    COO = "COO"
 
 
 # 数据模型
@@ -156,7 +156,7 @@ class GameRoom(BaseModel):
 
     def get_selected_roles(self) -> List[str]:
         """获取已选择的角色列表"""
-        return [p.role for p in self.players if p.role]
+        return [p.role.value for p in self.players if p.role]
 
     def all_players_submitted_actions(self, round_num: int) -> bool:
         """检查是否所有玩家都提交了当前轮次的行动"""

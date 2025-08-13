@@ -17,9 +17,9 @@ function RoleList({
     <div className="flex-1 flex flex-col justify-center space-y-6 max-w-md mx-auto w-full">
       {roles.map((role) => {
         const isSelected =
-          selectedRole === role.id || currentPlayerRole === role.id.toLowerCase();
+          selectedRole === role.id || currentPlayerRole === role.id;
         const isOccupied =
-          selectedRoles.includes(role.id.toLowerCase()) && !isSelected;
+          selectedRoles.includes(role.id) && !isSelected;
 
         return (
           <RoleCard

@@ -50,7 +50,7 @@ class GameHandler:
                             "name": p.name,
                             "is_online": p.is_online,
                             "startup_idea": p.startup_idea,
-                            "role": p.role,
+                            "role": p.role.value if p.role else None,
                             "isHost": p.is_host,
                         }
                         for p in room.players
@@ -79,7 +79,7 @@ class GameHandler:
                                 "name": p.name,
                                 "is_online": p.is_online,
                                 "startup_idea": p.startup_idea,
-                                "role": p.role,
+                                "role": p.role.value if p.role else None,
                                 "isHost": p.is_host,
                             }
                             for p in room.players
@@ -304,11 +304,8 @@ class GameHandler:
                 )
                 return
 
-            # 将角色ID转换为小写以匹配枚举值
-            role_lower = role.lower()
-
-            # 检查角色是否有效
-            if role_lower not in Role.__members__.values():
+            # 检查角色是否有效 - 直接使用原始角色值，因为枚举值是大写的
+            if role not in [r.value for r in Role]:
                 logger.warning(f"无效的角色: {role}")
                 await connection_manager.send_to_player(
                     player_name,
@@ -322,20 +319,20 @@ class GameHandler:
             # 原子性角色冲突检查 - 在锁保护下进行
             online_players = room.get_online_players()
             for p in online_players:
-                if p.name != player_name and p.role == role_lower:
+                if p.name != player_name and p.role and p.role.value == role:
                     logger.warning(f"角色 {role} 已被玩家 {p.name} 选择")
                     await connection_manager.send_to_player(
                         player_name,
                         {
                             "type": "role_selection_error",
-                            "data": {"message": f"角色 {role.upper()} 已被其他玩家选择，请选择其他角色"},
+                            "data": {"message": f"角色 {role} 已被其他玩家选择，请选择其他角色"},
                         },
                     )
                     return
 
             # 原子性设置玩家角色
             try:
-                player.role = Role(role_lower)
+                player.role = Role(role)
                 logger.info(f"玩家 {player_name} 成功选择角色: {role}")
             except Exception as e:
                 logger.error(f"设置玩家 {player_name} 角色失败: {str(e)}")
@@ -359,7 +356,7 @@ class GameHandler:
                             {
                                 "name": p.name,
                                 "is_online": p.is_online,
-                                "role": p.role,
+                                "role": p.role.value if p.role else None,
                                 "startup_idea": p.startup_idea,
                                 "isHost": p.is_host,
                             }
@@ -687,7 +684,7 @@ class GameHandler:
                         {
                             "name": p.name,
                             "is_online": p.is_online,
-                            "role": p.role,
+                            "role": p.role.value if p.role else None,
                             "startup_idea": p.startup_idea,
                             "isHost": p.is_host,
                         }
