@@ -96,6 +96,20 @@ function PrinterEffect({
   onRestart,
   gameResult,
 }: PrinterEffectProps) {
+  const handleExport = (): void => {
+    const content = gameResult?.final_report ?? "";
+    if (!content) return;
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    anchor.href = url;
+    anchor.download = `final_report_${dateStr}.md`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
   return (
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden relative flex flex-col">
       {/* 打印机背景 */}
@@ -105,6 +119,17 @@ function PrinterEffect({
           src="./print.png"
           alt="打印机"
         />
+      </div>
+
+      {/* 右上角导出按钮 */}
+      <div className="absolute top-4 right-4 z-30">
+        <button
+          onClick={handleExport}
+          disabled={!gameResult?.final_report}
+          className="bg-white text-black px-4 py-2 rounded-lg shadow hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          导出
+        </button>
       </div>
 
       {/* 初始状态内容 */}
@@ -158,20 +183,20 @@ function PrinterEffect({
               )}
 
               {gameResult?.final_report && (
-                <div className="markdown-content prose prose-sm max-w-none">
+                <div className="markdown prose prose-sm max-w-none">
                   <ReactMarkdown
                     components={{
                       h1: ({ children }) => (
-                        <h1 className="text-xl font-bold mb-3 text-zinc-900">{children}</h1>
+                        <h1 className="text-xl font-bold text-primary mb-3">{children}</h1>
                       ),
                       h2: ({ children }) => (
-                        <h2 className="text-lg font-semibold mb-2 text-zinc-800">{children}</h2>
+                        <h2 className="text-lg font-semibold text-primary mb-2">{children}</h2>
                       ),
                       h3: ({ children }) => (
-                        <h3 className="text-base font-medium mb-2 text-zinc-700">{children}</h3>
+                        <h3 className="text-base font-medium text-primary mb-2">{children}</h3>
                       ),
                       p: ({ children }) => (
-                        <p className="mb-3 text-zinc-700 leading-relaxed">{children}</p>
+                        <p className="mb-3 leading-relaxed">{children}</p>
                       ),
                       ul: ({ children }) => (
                         <ul className="mb-3 pl-4 space-y-1">{children}</ul>
@@ -183,7 +208,7 @@ function PrinterEffect({
                         <li className="text-zinc-700 leading-relaxed">{children}</li>
                       ),
                       strong: ({ children }) => (
-                        <strong className="font-semibold text-zinc-900">{children}</strong>
+                        <strong className="font-semibold">{children}</strong>
                       ),
                       em: ({ children }) => (
                         <em className="italic text-zinc-600">{children}</em>

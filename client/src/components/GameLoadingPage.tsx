@@ -90,7 +90,7 @@ function GameLoadingPage() {
     // 2秒后切换到video1
     const timer = setTimeout(() => {
       setCurrentView("video1");
-    }, 2000);
+    }, 5000);
 
     return () => {
       clearTimeout(timer);

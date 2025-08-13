@@ -374,6 +374,12 @@ export function GameProvider({ children }: GameProviderProps) {
       case "action_submitted":
         setPlayerActions(message.data.playerActions as PlayerAction[]);
         setWaitingForPlayers(message.data.waitingForPlayers as boolean);
+        // 若为第5轮且所有玩家已提交，但尚未收到服务器的 game_loading，先本地进入结算加载
+        if (!message.data.waitingForPlayers && currentRound >= 5) {
+          setGameState(GAME_STATES.LOADING);
+          saveGameState(playerName, currentRoom, GAME_STATES.LOADING);
+          addMessage("🔄 正在结算最终结果...");
+        }
         break;
       // 轮次结束
       case "round_complete":
@@ -486,7 +492,8 @@ export function GameProvider({ children }: GameProviderProps) {
               if (roles) setRoleDefinitions(roles as Record<string, RoleDefinition>);
               break;
             case "loading":
-              setGameState(GAME_STATES.ROUND_LOADING);
+              // 与服务端的通用加载（包括最终结算加载）对齐为 LOADING
+              setGameState(GAME_STATES.LOADING);
               setCurrentRound((current_round as number) || 1);
               if (background) setGameBackground(background as string);
               break;
@@ -512,7 +519,7 @@ export function GameProvider({ children }: GameProviderProps) {
           const stateMapping: Record<string, GameState> = {
             lobby: GAME_STATES.LOBBY,
             role_selection: GAME_STATES.ROLE_SELECTION,
-            loading: GAME_STATES.ROUND_LOADING,
+            loading: GAME_STATES.LOADING,
             playing: GAME_STATES.PLAYING,
             finished: GAME_STATES.RESULT,
           };

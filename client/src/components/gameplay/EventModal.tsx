@@ -1,4 +1,4 @@
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown from "react-markdown";
 
 interface EventModalProps {
   isOpen: boolean;
@@ -11,18 +11,16 @@ interface EventModalProps {
 /**
  * 事件详情模态框组件
  */
-export const EventModal = ({ 
-  isOpen, 
-  currentRound, 
-  roundEvent, 
+export const EventModal = ({
+  isOpen,
+  currentRound,
+  roundEvent,
   gameBackground,
-  onClose 
+  onClose,
 }: EventModalProps) => {
   if (!isOpen || !roundEvent) {
     return null;
   }
-
-
 
   return (
     <div className="fixed inset-0 z-50">
@@ -102,9 +100,11 @@ export const EventModal = ({
                   创业背景
                 </h3>
               </div>
-              
+
               <div className="text-sm text-gray-300 font-['Cactus_Classical_Serif'] markdown-content">
-                <ReactMarkdown>{gameBackground}</ReactMarkdown>
+                {gameBackground.split("\n").map((line, index) => (
+                  <div key={index} className="mb-2">{line}</div>
+                ))}
               </div>
             </div>
           </div>
