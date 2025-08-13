@@ -534,13 +534,7 @@ class GameHandler:
             f"玩家 {player_name} 提交第{room.current_round}轮行动: {action['action']}"
         )
 
-        # 第五轮：提交后直接进入结算加载，不再显示“等待其他玩家”
-        if room.current_round >= 5:
-            logger.info(f"房间 {room_id} 第{room.current_round}轮为最终轮，直接进入结算")
-            await GameHandler._handle_game_complete(room_id, room)
-            return
-
-        # 非最终轮：正常广播提交状态并在全部提交后进入下一轮
+        # 广播提交状态（包括最终轮），仅在所有人提交后再推进
         await connection_manager.broadcast_to_room(
             room_id,
             {
