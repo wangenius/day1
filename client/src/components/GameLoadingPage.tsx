@@ -39,7 +39,10 @@ function GameLoadingPage() {
   console.log("GameLoadingPage - playerName:", playerName);
   console.log("GameLoadingPage - roleDefinitions:", roleDefinitions);
   console.log("GameLoadingPage - players:", players);
-  console.log("GameLoadingPage - players详细:", JSON.stringify(players, null, 2));
+  console.log(
+    "GameLoadingPage - players详细:",
+    JSON.stringify(players, null, 2)
+  );
 
   /**
    * 获取当前玩家的角色信息
@@ -49,7 +52,9 @@ function GameLoadingPage() {
     if (!playerName) return null;
 
     // 从players数组中找到当前玩家
-    const currentPlayer = players.find((player: Player) => player.name === playerName);
+    const currentPlayer = players.find(
+      (player: Player) => player.name === playerName
+    );
     if (!currentPlayer || !currentPlayer.role) return null;
 
     // 根据玩家选择的角色ID获取角色信息
@@ -76,7 +81,7 @@ function GameLoadingPage() {
 
   const currentRole = getCurrentPlayerRole();
   const roleName = currentRole ? currentRole.name : playerName;
-  
+
   // 添加调试日志
   console.log("GameLoadingPage - currentRole:", currentRole);
   console.log("GameLoadingPage - roleName:", roleName);
@@ -121,8 +126,8 @@ function GameLoadingPage() {
         {/* 角色图片 */}
         <img
           className="w-full max-w-xs h-48 object-cover rounded-lg"
-          src={`/${currentRole?.id || 'CEO'}.png`}
-          alt={`${currentRole?.name || 'CEO'}角色`}
+          src={`/${currentRole?.id || "CEO"}.png`}
+          alt={`${currentRole?.name || "CEO"}角色`}
         />
 
         {/* 游戏规则说明 */}
@@ -130,7 +135,8 @@ function GameLoadingPage() {
           <div className="text-yellow-300 text-xl mb-2">游戏规则</div>
           每个角色都有双重任务：
           <br />
-          <span className="text-green-300">让公司变得更好</span> + <span className="text-blue-300">让自己职业生涯变得更好</span>
+          <span className="text-green-300">让公司变得更好</span> +{" "}
+          <span className="text-blue-300">让自己职业生涯变得更好</span>
         </div>
 
         {/* 角色名称 */}
@@ -175,18 +181,6 @@ function GameLoadingPage() {
 function Video1({ onEnded }: Video1Props) {
   return (
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden relative flex flex-col">
-      {/* 状态栏 */}
-      <div className="w-full h-12 relative overflow-hidden flex justify-between items-center px-6">
-        <div className="w-14 h-6 rounded-[34.44px] relative">
-          <div className="w-8 h-3 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white" />
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-6 h-3 opacity-30 rounded-[2.87px] border border-white" />
-          <div className="w-[1.43px] h-1 opacity-40 bg-white" />
-          <div className="w-5 h-2 bg-white rounded-sm" />
-        </div>
-      </div>
-
       {/* 视频 */}
       <video
         className="w-full flex-1 object-cover"
@@ -211,18 +205,6 @@ function Video1({ onEnded }: Video1Props) {
 function Video2() {
   return (
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden relative flex flex-col">
-      {/* 状态栏 */}
-      <div className="w-full h-12 relative overflow-hidden flex justify-between items-center px-6">
-        <div className="w-14 h-6 rounded-[34.44px] relative">
-          <div className="w-8 h-3 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white" />
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-6 h-3 opacity-30 rounded-[2.87px] border border-white" />
-          <div className="w-[1.43px] h-1 opacity-40 bg-white" />
-          <div className="w-5 h-2 bg-white rounded-sm" />
-        </div>
-      </div>
-
       {/* 视频 */}
       <video
         className="w-full flex-1 object-cover"
