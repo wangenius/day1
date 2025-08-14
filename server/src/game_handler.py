@@ -637,8 +637,8 @@ class GameHandler:
 
         # 第七步：为第1轮安排阶段广播（由后端主导）
         try:
-            # 立即进入事件展示
-            room.set_phase("event_display", 10)
+            # 立即进入事件展示；整轮总时长180秒
+            room.set_phase("event_display", 180)
             await connection_manager.broadcast_to_room(
                 room_id,
                 {
@@ -678,7 +678,8 @@ class GameHandler:
                 # 仅当仍处于 event_display 时才推进
                 if r.current_phase != "event_display":
                     return
-                r.set_phase("info_and_options", 20)
+                # 切换阶段但保持剩余时间不变
+                r.set_phase("info_and_options", r.phase_remain)
                 await connection_manager.broadcast_to_room(
                     room_id,
                     {
@@ -697,7 +698,8 @@ class GameHandler:
                 # 仅当仍处于 info_and_options 时才推进
                 if r.current_phase != "info_and_options":
                     return
-                r.set_phase("discussion", 120)
+                # 切换阶段但保持剩余时间不变
+                r.set_phase("discussion", r.phase_remain)
                 await connection_manager.broadcast_to_room(
                     room_id,
                     {
@@ -908,7 +910,8 @@ class GameHandler:
 
         # 广播前端阶段（由后端主导）：进入事件展示，10秒后进入信息，20秒后进入讨论
         try:
-            room.set_phase("event_display", 10)
+            # 新回合开始：整轮总时长180秒
+            room.set_phase("event_display", 180)
             await connection_manager.broadcast_to_room(
                 room_id,
                 {
@@ -954,7 +957,8 @@ class GameHandler:
                 # 仅当仍处于 event_display 时才推进
                 if r.current_phase != "event_display":
                     return
-                r.set_phase("info_and_options", 20)
+                # 切换阶段但保持剩余时间不变
+                r.set_phase("info_and_options", r.phase_remain)
                 await connection_manager.broadcast_to_room(
                     room_id,
                     {
@@ -978,7 +982,8 @@ class GameHandler:
                 # 仅当仍处于 info_and_options 时才推进
                 if r.current_phase != "info_and_options":
                     return
-                r.set_phase("discussion", 120)
+                # 切换阶段但保持剩余时间不变
+                r.set_phase("discussion", r.phase_remain)
                 await connection_manager.broadcast_to_room(
                     room_id,
                     {
