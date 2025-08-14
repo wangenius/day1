@@ -134,6 +134,29 @@ export function GameProvider({ children }: GameProviderProps) {
   /** 是否正在加载房间列表 */
   const [loadingRoomList, setLoadingRoomList] = useState<boolean>(false);
 
+  // ==================== 前端阶段与交互状态（从 GamePlay 提升） ====================
+  const UI_GAME_PHASES = {
+    EVENT_DISPLAY: "event_display",
+    INFO_AND_OPTIONS: "info_and_options",
+    DISCUSSION: "discussion",
+    SELECTION: "selection",
+  } as const;
+
+  /** 当前前端阶段 */
+  const [currentPhase, setCurrentPhase] = useState<string>(UI_GAME_PHASES.EVENT_DISPLAY);
+  /** 讨论倒计时（秒） */
+  const [discussionTimeLeft, setDiscussionTimeLeft] = useState<number>(120);
+  /** 选择倒计时（秒） */
+  const [selectionTimeLeft, setSelectionTimeLeft] = useState<number>(20);
+  /** 当前选择的选项键 */
+  const [selectedAction, setSelectedAction] = useState<string>("");
+  /** 是否已提交（与服务端同步） */
+  const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
+  /** 私人信息弹窗 */
+  const [showPrivateModal, setShowPrivateModal] = useState<boolean>(false);
+  /** 事件详情弹窗 */
+  const [showEventModal, setShowEventModal] = useState<boolean>(false);
+
   // ==================== 内部状态 ====================
   
   /** 消息列表（当前未使用） */
@@ -328,6 +351,14 @@ export function GameProvider({ children }: GameProviderProps) {
       case "game_started":
         setGameState(GAME_STATES.PLAYING);
         setCurrentRound(1);
+        // 初始化前端阶段与倒计时/提交态
+        setCurrentPhase(UI_GAME_PHASES.EVENT_DISPLAY);
+        setDiscussionTimeLeft(120);
+        setSelectionTimeLeft(20);
+        setSelectedAction("");
+        setHasSubmitted(false);
+        setPlayerActions([]);
+        setWaitingForPlayers(false);
         // 设置轮次事件
         if (message.data.roundEvent) {
           setRoundEvent(message.data.roundEvent as RoundEvent);
@@ -354,6 +385,12 @@ export function GameProvider({ children }: GameProviderProps) {
       case "round_start":
         setGameState(GAME_STATES.PLAYING);
         setCurrentRound(message.data.round as number);
+    // 重置前端阶段/倒计时/提交态
+    setCurrentPhase(UI_GAME_PHASES.EVENT_DISPLAY);
+    setDiscussionTimeLeft(120);
+    setSelectionTimeLeft(20);
+    setSelectedAction("");
+    setHasSubmitted(false);
         // 更新轮次事件
         if (message.data.roundEvent) {
           setRoundEvent(message.data.roundEvent as RoundEvent);
@@ -374,6 +411,13 @@ export function GameProvider({ children }: GameProviderProps) {
       case "action_submitted":
         setPlayerActions(message.data.playerActions as PlayerAction[]);
         setWaitingForPlayers(message.data.waitingForPlayers as boolean);
+    // 同步本地提交态（兼容断线重连/超时自动提交）
+    try {
+      const hasMe = (message.data.playerActions as PlayerAction[]).some(
+        (a) => a.playerName === playerName && a.round === currentRound
+      );
+      setHasSubmitted(Boolean(hasMe));
+    } catch {}
         // 若为第5轮且所有玩家已提交，但尚未收到服务器的 game_loading，先本地进入结算加载
         if (!message.data.waitingForPlayers && currentRound >= 5) {
           setGameState(GAME_STATES.LOADING);
@@ -381,6 +425,53 @@ export function GameProvider({ children }: GameProviderProps) {
           addMessage("🔄 正在结算最终结果...");
         }
         break;
+      // 后端主导的UI阶段
+      case "round_phase":
+        switch (message.data.phase as string) {
+          case "event_display":
+            setCurrentPhase(UI_GAME_PHASES.EVENT_DISPLAY);
+            break;
+          case "info_and_options":
+            setCurrentPhase(UI_GAME_PHASES.INFO_AND_OPTIONS);
+            break;
+          case "discussion":
+            setCurrentPhase(UI_GAME_PHASES.DISCUSSION);
+            break;
+          case "selection":
+            setCurrentPhase(UI_GAME_PHASES.SELECTION);
+            break;
+          default:
+            break;
+        }
+        break;
+      // 每秒后端心跳：同步整轮状态（单一真相源）
+      case "round_tick": {
+        const d = message.data as any;
+        // 基本字段
+        if (typeof d.round === "number") setCurrentRound(d.round);
+        if (typeof d.phase === "string") setCurrentPhase(d.phase);
+        // 剩余时间：根据阶段设置（仅用于显示，不再本地倒计时推进阶段）
+        if (typeof d.remaining === "number") {
+          if (d.phase === UI_GAME_PHASES.DISCUSSION) setDiscussionTimeLeft(d.remaining);
+          if (d.phase === UI_GAME_PHASES.SELECTION) setSelectionTimeLeft(d.remaining);
+        }
+        // 同步当轮事件/私信
+        if (d.roundEvent) setRoundEvent(d.roundEvent as RoundEvent);
+        if (d.privateMessages) setPrivateMessages(d.privateMessages as Record<string, string>);
+        // 同步行动/等待
+        if (Array.isArray(d.playerActions)) setPlayerActions(d.playerActions as PlayerAction[]);
+        if (typeof d.waitingForPlayers === "boolean") setWaitingForPlayers(d.waitingForPlayers as boolean);
+        // 用playerActions矫正本地 hasSubmitted
+        try {
+          const hasMe = (d.playerActions as PlayerAction[] | undefined)?.some(
+            (a) => a.playerName === playerName && a.round === (d.round as number)
+          );
+          setHasSubmitted(Boolean(hasMe));
+        } catch {}
+        // 玩家列表（用于头像/房主标记）
+        if (Array.isArray(d.players)) setPlayers(d.players as Player[]);
+        break;
+      }
       // 轮次结束
       case "round_complete":
         addMessage(`第${message.data.round}轮结束`);
@@ -544,7 +635,7 @@ export function GameProvider({ children }: GameProviderProps) {
     wsRef.current.onclose = (event: CloseEvent): void => {
       setWsConnected(false);
       // 根据关闭代码显示相应的错误信息
-      if (event.code === 4004 || event.code === 4000 || event.code === 4001) {
+      if (event.code === 4004 || event.code === 4000 || event.code === 4001 || event.code === 4005) {
         addMessage(`❌ ${event.reason}`, "error");
       } else {
         addMessage("WebSocket连接关闭");
@@ -893,6 +984,53 @@ export function GameProvider({ children }: GameProviderProps) {
     addMessage("🔄 游戏已重新开始，回到等待室");
   };
 
+  // ==================== 前端阶段倒计时（统一在Context管理） ====================
+  useEffect(() => {
+    let timer: number;
+    if (gameState === GAME_STATES.PLAYING && currentPhase === UI_GAME_PHASES.SELECTION && selectionTimeLeft > 0) {
+      timer = window.setTimeout(() => {
+        setSelectionTimeLeft((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [gameState, currentPhase, selectionTimeLeft]);
+
+  useEffect(() => {
+    let timer: number;
+    if (gameState === GAME_STATES.PLAYING && currentPhase === UI_GAME_PHASES.DISCUSSION && discussionTimeLeft > 0) {
+      timer = window.setTimeout(() => {
+        setDiscussionTimeLeft((prev) => {
+          if (prev <= 1) {
+            // 由后端广播 selection 阶段，因此不在前端强制切换
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [gameState, currentPhase, discussionTimeLeft]);
+
+  // 阶段切换改由后端驱动（round_phase），前端不再本地计时自动切换
+
+  // 供组件调用的前端阶段/交互方法
+  const goToSelection = (): void => setCurrentPhase(UI_GAME_PHASES.SELECTION);
+  const goToInfoAndOptions = (): void => setCurrentPhase(UI_GAME_PHASES.INFO_AND_OPTIONS);
+  const goToDiscussion = (): void => setCurrentPhase(UI_GAME_PHASES.DISCUSSION);
+  const selectAction = (actionKey: string): void => setSelectedAction(actionKey);
+  const submitSelectedAction = (): void => {
+    if (!selectedAction) return;
+    const action: PlayerAction = {
+      playerName,
+      actionType: "decision",
+      action: selectedAction,
+      round: currentRound,
+      timestamp: new Date().toISOString(),
+    };
+    handleActionSubmit(action);
+    setHasSubmitted(true);
+  };
+
   // ==================== Context值对象 ====================
   
   /**
@@ -920,6 +1058,23 @@ export function GameProvider({ children }: GameProviderProps) {
     roleDefinitions,
     roomList,
     loadingRoomList,
+
+    // ========== 前端阶段与交互状态 ==========
+    currentPhase,
+    discussionTimeLeft,
+    selectionTimeLeft,
+    selectedAction,
+    hasSubmitted,
+    showPrivateModal,
+    showEventModal,
+
+    goToSelection,
+    goToInfoAndOptions,
+    goToDiscussion,
+    selectAction,
+    submitSelectedAction,
+    setShowPrivateModal,
+    setShowEventModal,
 
     // ========== 事件处理方法 ==========
     handleInitialPageClick,

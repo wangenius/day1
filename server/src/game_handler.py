@@ -4,6 +4,7 @@ import logging
 import asyncio
 import os
 import sys
+import random
 
 # 添加script目录到Python路径
 script_dir = os.path.join(os.path.dirname(__file__), "script")
@@ -19,9 +20,92 @@ logger = logging.getLogger(__name__)
 class GameHandler:
     """游戏逻辑处理器"""
 
+    # 回合行动提交超时（秒）：180，预留缓冲
+    ROUND_ACTION_TIMEOUT_SECONDS = 180
+
+    # 管理每个房间每轮的超时任务，key格式："{room_id}:{round}"
+    _round_timeout_tasks: Dict[str, asyncio.Task] = {}
+    # 每秒心跳任务：room_id -> task
+    _round_tick_tasks: Dict[str, asyncio.Task] = {}
+
+    @staticmethod
+    def _timeout_task_key(room_id: str, round_num: int) -> str:
+        return f"{room_id}:{round_num}"
+
+    @staticmethod
+    def _cancel_round_timeout(room_id: str, round_num: int):
+        key = GameHandler._timeout_task_key(room_id, round_num)
+        task = GameHandler._round_timeout_tasks.pop(key, None)
+        if task and not task.done():
+            task.cancel()
+            try:
+                # 尝试让事件循环处理取消
+                asyncio.get_event_loop().call_soon_threadsafe(lambda: None)
+            except Exception:
+                pass
+
+    @staticmethod
+    def _start_round_tick(room_id: str):
+        # 停止旧任务
+        existing = GameHandler._round_tick_tasks.pop(room_id, None)
+        if existing and not existing.done():
+            existing.cancel()
+
+        async def _tick_loop():
+            while True:
+                try:
+                    await asyncio.sleep(1)
+                    room = room_manager.get_room(room_id)
+                    if not room or room.game_state != GameState.PLAYING:
+                        logger.info(f"[TICK] 房间 {room_id} 不在PLAYING，停止tick")
+                        break
+                    # 计算剩余时间
+                    remaining = 0
+                    if room.current_phase and room.phase_remain:
+                        remaining = room.phase_remain
+                    current_round = room.current_round
+                    round_event = room.round_events.get(current_round)
+                    private_messages = room.round_private_messages.get(current_round)
+                    player_actions = room.round_actions.get(current_round, [])
+                    waiting_for = not room.all_players_submitted_actions(current_round)
+                    players = [
+                        {
+                            "name": p.name,
+                            "is_online": p.is_online,
+                            "role": p.role.value if p.role else None,
+                            "isHost": p.is_host,
+                        }
+                        for p in room.players
+                    ]
+
+                    payload = {
+                        "type": MessageType.ROUND_TICK,
+                        "data": {
+                            "round": current_round,
+                            "phase": room.current_phase,
+                            "remaining": remaining,
+                            "roundEvent": round_event,
+                            "privateMessages": private_messages,
+                            "playerActions": player_actions,
+                            "waitingForPlayers": waiting_for,
+                            "players": players,
+                        },
+                    }
+                    await connection_manager.broadcast_to_room(room_id, payload)
+                    logger.info(
+                        f"[TICK] 房间 {room_id} r={current_round} phase={room.current_phase} remaining={remaining} actions={len(player_actions)} waiting={waiting_for}"
+                    )
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"[TICK] 房间 {room_id} tick 失败: {e}")
+                    break
+
+        GameHandler._round_tick_tasks[room_id] = asyncio.create_task(_tick_loop())
+
     @staticmethod
     async def handle_startup_idea(player_name: str, idea: str):
-        """处理创业想法提交"""
+        """用户提交创业想法"""
         room_id = connection_manager.get_player_room(player_name)
         if not room_id:
             return
@@ -42,7 +126,7 @@ class GameHandler:
         await connection_manager.broadcast_to_room(
             room_id,
             {
-                "type": MessageType.PLAYER_JOIN,  # 复用PLAYER_JOIN消息类型来更新玩家列表
+                "type": MessageType.PLAYER_JOIN,
                 "data": {
                     "player_name": player_name,
                     "players": [
@@ -173,7 +257,10 @@ class GameHandler:
 
     @staticmethod
     async def handle_start_game(player_name: str):
-        """处理开始游戏"""
+        """房主开始游戏： 此时用户已经提交了所有的创业想法，但是处在大厅之中，游戏没有开始。
+        1. 此时还可以加入新的玩家
+        2. 当游戏开始是（不是GameState.LOBBY），就不能加入了。
+        """
         room_id = connection_manager.get_player_room(player_name)
         if not room_id:
             return
@@ -186,7 +273,6 @@ class GameHandler:
         if not player or not player.is_host:
             return
 
-        # 在大厅状态时生成背景和角色，在角色选择状态时开始第一轮游戏
         if room.game_state == GameState.LOBBY:
             # 先广播游戏开始加载消息
             await connection_manager.broadcast_to_room(
@@ -231,7 +317,6 @@ class GameHandler:
                     try:
                         action = role_data.get("actions", [])
                     except ValueError:
-                        # 如果角色键无效，使用空的actions列表
                         action = []
 
                     dynamic_roles[role_key] = {
@@ -262,8 +347,6 @@ class GameHandler:
                 },
             )
 
-        # 角色选择完成后会自动开始游戏，不再需要房主手动开始
-
     @staticmethod
     async def handle_role_selection(player_name: str, role: str):
         """处理角色选择 - 使用锁确保原子性"""
@@ -286,7 +369,7 @@ class GameHandler:
         # 使用异步锁确保整个角色选择操作的原子性
         async with room_lock:
             logger.info(f"玩家 {player_name} 获得房间 {room_id} 锁，开始角色选择")
-            
+
             player = room.get_player(player_name)
             if not player:
                 logger.warning(f"玩家 {player_name} 在房间 {room_id} 中不存在")
@@ -325,7 +408,9 @@ class GameHandler:
                         player_name,
                         {
                             "type": "role_selection_error",
-                            "data": {"message": f"角色 {role} 已被其他玩家选择，请选择其他角色"},
+                            "data": {
+                                "message": f"角色 {role} 已被其他玩家选择，请选择其他角色"
+                            },
                         },
                     )
                     return
@@ -372,7 +457,7 @@ class GameHandler:
 
                 # 所有玩家选择完角色后，直接开始游戏
                 await GameHandler._auto_start_game_after_role_selection(room_id)
-            
+
             logger.info(f"玩家 {player_name} 角色选择处理完成，释放房间 {room_id} 锁")
 
     @staticmethod
@@ -503,6 +588,103 @@ class GameHandler:
             },
         )
 
+        # 第七步：为第1轮安排阶段广播（由后端主导）
+        try:
+            # 立即进入事件展示
+            room.set_phase("event_display", 10)
+            await connection_manager.broadcast_to_room(
+                room_id,
+                {
+                    "type": MessageType.ROUND_PHASE,
+                    "data": {
+                        "phase": "event_display",
+                        "round": 1,
+                        "remaining": room.phase_duration_seconds,
+                    },
+                },
+            )
+
+            async def _delayed_phase_change_first_round(delay: int, phase: str):
+                try:
+                    await asyncio.sleep(delay)
+                    r = room_manager.get_room(room_id)
+                    if (
+                        not r
+                        or r.current_round != 1
+                        or r.game_state != GameState.PLAYING
+                    ):
+                        return
+                    await connection_manager.broadcast_to_room(
+                        room_id,
+                        {
+                            "type": MessageType.ROUND_PHASE,
+                            "data": {"phase": phase, "round": 1},
+                        },
+                    )
+                except Exception as e:
+                    logger.error(f"广播第1轮阶段 {phase} 失败: {e}")
+
+            # 10秒后进入信息阶段；10+20秒后进入讨论阶段
+            async def _to_info_first():
+                r = room_manager.get_room(room_id)
+                if not r or r.current_round != 1 or r.game_state != GameState.PLAYING:
+                    return
+                r.set_phase("info_and_options", 20)
+                await connection_manager.broadcast_to_room(
+                    room_id,
+                    {
+                        "type": MessageType.ROUND_PHASE,
+                        "data": {
+                            "phase": "info_and_options",
+                            "round": 1,
+                            "remaining": r.phase_duration_seconds,
+                        },
+                    },
+                )
+
+            async def _to_discussion_first():
+                r = room_manager.get_room(room_id)
+                if not r or r.current_round != 1 or r.game_state != GameState.PLAYING:
+                    return
+                r.set_phase("discussion", 120)
+                await connection_manager.broadcast_to_room(
+                    room_id,
+                    {
+                        "type": MessageType.ROUND_PHASE,
+                        "data": {
+                            "phase": "discussion",
+                            "round": 1,
+                            "remaining": r.phase_duration_seconds,
+                        },
+                    },
+                )
+
+            asyncio.create_task(_delayed_phase_change_first_round(10, "noop"))
+            asyncio.get_event_loop().call_later(
+                10, lambda: asyncio.create_task(_to_info_first())
+            )
+            asyncio.create_task(_delayed_phase_change_first_round(30, "noop"))
+            asyncio.get_event_loop().call_later(
+                30, lambda: asyncio.create_task(_to_discussion_first())
+            )
+        except Exception as e:
+            logger.error(f"安排第1轮阶段广播失败: {e}")
+
+        # 第八步：为第1轮安排超时自动提交任务
+        try:
+            key = GameHandler._timeout_task_key(room_id, 1)
+            GameHandler._cancel_round_timeout(room_id, 1)
+            GameHandler._round_timeout_tasks[key] = asyncio.create_task(
+                GameHandler._auto_submit_after_timeout(
+                    room_id, 1, GameHandler.ROUND_ACTION_TIMEOUT_SECONDS
+                )
+            )
+            logger.info(
+                f"房间 {room_id} 第1轮已安排超时自动提交任务，超时 {GameHandler.ROUND_ACTION_TIMEOUT_SECONDS}s"
+            )
+        except Exception as e:
+            logger.error(f"安排第1轮超时自动提交任务失败: {e}")
+
     @staticmethod
     async def handle_game_action(player_name: str, action_data: Dict):
         """处理游戏行动"""
@@ -521,7 +703,7 @@ class GameHandler:
         # 构建行动数据
         action = {
             "playerName": player_name,  # 修正为前端期望的字段名
-            "actionType": "decision",   # 添加前端期望的字段
+            "actionType": "decision",  # 添加前端期望的字段
             "action": action_data.get("action"),
             "round": room.current_round,  # 添加轮次信息
             "role": player.role,
@@ -549,6 +731,8 @@ class GameHandler:
         )
 
         if room.all_players_submitted_actions(room.current_round):
+            # 所有人已提交，取消该轮超时任务
+            GameHandler._cancel_round_timeout(room_id, room.current_round)
             await GameHandler._handle_round_complete(room_id, room)
 
     @staticmethod
@@ -577,7 +761,9 @@ class GameHandler:
         )
         # 在计算结果前，补充最后一轮的经历分析（基于上一轮的事件与选择）
         try:
-            if room.current_round >= 1 and not room.round_situation.get(room.current_round):
+            if room.current_round >= 1 and not room.round_situation.get(
+                room.current_round
+            ):
                 analysis_text = await asyncio.get_event_loop().run_in_executor(
                     None, room.generate_round_analysis, room.current_round + 1
                 )
@@ -626,7 +812,9 @@ class GameHandler:
                     None, room.generate_round_analysis, room.current_round
                 )
             except Exception as e:
-                logger.error(f"房间 {room_id} 生成第{room.current_round-1}轮经历分析失败: {e}")
+                logger.error(
+                    f"房间 {room_id} 生成第{room.current_round-1}轮经历分析失败: {e}"
+                )
 
         # 调用房间的generate_event方法，该方法已经包含了重试机制和默认事件处理
         event_data = await asyncio.get_event_loop().run_in_executor(
@@ -635,9 +823,7 @@ class GameHandler:
 
         # 保存事件和私人信息到房间状态
         room.round_events[room.current_round] = event_data["event"]
-        room.round_private_messages[room.current_round] = event_data[
-            "private_messages"
-        ]
+        room.round_private_messages[room.current_round] = event_data["private_messages"]
         if "situation" in event_data:
             room.round_situation[room.current_round] = event_data["situation"]
 
@@ -663,6 +849,114 @@ class GameHandler:
                 },
             },
         )
+
+        # 广播前端阶段（由后端主导）：进入事件展示，10秒后进入信息，20秒后进入讨论
+        try:
+            room.set_phase("event_display", 10)
+            await connection_manager.broadcast_to_room(
+                room_id,
+                {
+                    "type": MessageType.ROUND_PHASE,
+                    "data": {
+                        "phase": "event_display",
+                        "round": room.current_round,
+                        "remaining": room.phase_duration_seconds,
+                    },
+                },
+            )
+
+            async def _delayed_phase_change(delay: int, phase: str):
+                try:
+                    await asyncio.sleep(delay)
+                    # 如果回合已变化或不在PLAYING，则不再推进
+                    r = room_manager.get_room(room_id)
+                    if (
+                        not r
+                        or r.current_round != room.current_round
+                        or r.game_state != GameState.PLAYING
+                    ):
+                        return
+                    await connection_manager.broadcast_to_room(
+                        room_id,
+                        {
+                            "type": MessageType.ROUND_PHASE,
+                            "data": {"phase": phase, "round": r.current_round},
+                        },
+                    )
+                except Exception as e:
+                    logger.error(f"广播阶段 {phase} 失败: {e}")
+
+            # 10秒后进入信息阶段
+            async def _to_info():
+                # 切到信息阶段（20秒）
+                r = room_manager.get_room(room_id)
+                if (
+                    not r
+                    or r.current_round != room.current_round
+                    or r.game_state != GameState.PLAYING
+                ):
+                    return
+                r.set_phase("info_and_options", 20)
+                await connection_manager.broadcast_to_room(
+                    room_id,
+                    {
+                        "type": MessageType.ROUND_PHASE,
+                        "data": {
+                            "phase": "info_and_options",
+                            "round": r.current_round,
+                            "remaining": r.phase_duration_seconds,
+                        },
+                    },
+                )
+
+            async def _to_discussion():
+                # 切到讨论阶段（120秒）
+                r = room_manager.get_room(room_id)
+                if (
+                    not r
+                    or r.current_round != room.current_round
+                    or r.game_state != GameState.PLAYING
+                ):
+                    return
+                r.set_phase("discussion", 120)
+                await connection_manager.broadcast_to_room(
+                    room_id,
+                    {
+                        "type": MessageType.ROUND_PHASE,
+                        "data": {
+                            "phase": "discussion",
+                            "round": r.current_round,
+                            "remaining": r.phase_duration_seconds,
+                        },
+                    },
+                )
+
+            asyncio.create_task(_delayed_phase_change(10, "noop"))
+            asyncio.get_event_loop().call_later(
+                10, lambda: asyncio.create_task(_to_info())
+            )
+            # 10+20秒后进入讨论阶段
+            asyncio.create_task(_delayed_phase_change(30, "noop"))
+            asyncio.get_event_loop().call_later(
+                30, lambda: asyncio.create_task(_to_discussion())
+            )
+        except Exception as e:
+            logger.error(f"安排阶段广播失败: {e}")
+
+        # 安排本轮超时自动提交任务
+        try:
+            key = GameHandler._timeout_task_key(room_id, room.current_round)
+            # 保险起见，取消可能存在的同键任务
+            GameHandler._cancel_round_timeout(room_id, room.current_round)
+            GameHandler._round_timeout_tasks[key] = asyncio.create_task(
+                GameHandler._auto_submit_after_timeout(
+                    room_id,
+                    room.current_round,
+                    GameHandler.ROUND_ACTION_TIMEOUT_SECONDS,
+                )
+            )
+        except Exception as e:
+            logger.error(f"安排回合超时任务失败: {e}")
 
     @staticmethod
     async def handle_restart_game(player_name: str):
@@ -701,6 +995,63 @@ class GameHandler:
                 },
             },
         )
+
+    @staticmethod
+    async def _auto_submit_after_timeout(
+        room_id: str, round_num: int, timeout_seconds: int
+    ):
+        """在超时后为未提交的在线玩家随机提交一个选项，并推进回合。"""
+        try:
+            await asyncio.sleep(timeout_seconds)
+        except asyncio.CancelledError:
+            return
+
+        room = room_manager.get_room(room_id)
+        if not room:
+            return
+
+        # 如果房间已经进入下一轮或不在进行中，放弃
+        if room.current_round != round_num or room.game_state != GameState.PLAYING:
+            return
+
+        # 若已经全部提交，则不处理
+        if room.all_players_submitted_actions(round_num):
+            return
+
+        # 获取可选项
+        decision_options = {}
+        try:
+            event_obj = room.round_events.get(round_num, {})
+            if isinstance(event_obj, dict):
+                decision_options = event_obj.get("decision_options", {})
+        except Exception:
+            decision_options = {}
+
+        option_keys = list(decision_options.keys()) or ["A", "B", "C"]
+
+        # 计算未提交的在线玩家
+        online_players = room.get_online_players()
+        submitted = set()
+        if round_num in room.round_actions:
+            for a in room.round_actions[round_num]:
+                submitted.add(a.get("playerName"))
+
+        missing_players = [p for p in online_players if p.name not in submitted]
+
+        # 为每个未提交玩家自动提交
+        for p in missing_players:
+            try:
+                auto_choice = random.choice(option_keys)
+                # 复用玩家正常提交的处理流程，确保行为一致
+                await GameHandler.handle_game_action(
+                    p.name,
+                    {"action": auto_choice, "reason": "timeout_auto"},
+                )
+                logger.info(
+                    f"玩家 {p.name} 超时未提交，系统自动选择并提交: {auto_choice}"
+                )
+            except Exception as e:
+                logger.error(f"为玩家 {p.name} 自动提交失败: {e}")
 
 
 # 全局游戏处理器实例

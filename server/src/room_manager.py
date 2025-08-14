@@ -16,6 +16,9 @@ class RoomManager:
 
     def create_room(self, room_id: str) -> GameRoom:
         """创建房间"""
+        # 房间数量上限：最多10个
+        if len(self.rooms) >= 10:
+            raise ValueError("房间数量已满，请耐心排队")
         if room_id in self.rooms:
             raise ValueError(f"房间 {room_id} 已存在")
 

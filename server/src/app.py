@@ -43,14 +43,24 @@ async def create_room(request: CreateRoomRequest):
         # 检查房间是否已存在
         existing_room = room_manager.get_room(request.room_id)
         if existing_room:
-            # 房间已存在，直接加入
-            room = room_manager.join_room(request.player_name, request.room_id)
-            logger.info(
-                f"Player {request.player_name} joined existing room: {request.room_id}"
-            )
+            # 房间已存在，检查是否已满
+            try:
+                room = room_manager.join_room(request.player_name, request.room_id)
+                logger.info(
+                    f"Player {request.player_name} joined existing room: {request.room_id}"
+                )
+            except ValueError as e:
+                # 房间满员等情况
+                logger.warning(f"Join room failed: {e}")
+                return {"room_id": request.room_id, "success": False, "message": str(e)}
         else:
             # 房间不存在，创建新房间
-            room = room_manager.create_room(request.room_id)
+            try:
+                room = room_manager.create_room(request.room_id)
+            except ValueError as e:
+                # 房间总数已满
+                logger.warning(f"Create room failed: {e}")
+                return {"room_id": request.room_id, "success": False, "message": str(e)}
             # 创建者自动加入房间
             room = room_manager.join_room(request.player_name, request.room_id)
             logger.info(

@@ -10,6 +10,7 @@ interface SelectionProps {
   privateMessages: Record<string, string>;
   selectedAction: string;
   hasSubmitted: boolean;
+  waitingForPlayers: boolean;
   selectionTimeLeft: number;
   players: any[];
   playerActions: any[];
@@ -31,6 +32,7 @@ export const Selection = ({
   privateMessages,
   selectedAction,
   hasSubmitted,
+  waitingForPlayers,
   selectionTimeLeft,
   players,
   playerActions,
@@ -49,22 +51,7 @@ export const Selection = ({
   });
 
   return (
-    <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col p-4">
-      {/* 顶部布局：左上角阶段，右上角用户名 */}
-      <div className="flex justify-between items-start pt-4 pb-6">
-        {/* 左上角：阶段 */}
-        <div
-          className="opacity-60 text-white text-lg font-normal font-['Cactus_Classical_Serif'] uppercase leading-normal cursor-pointer hover:opacity-80 transition-opacity duration-200"
-          onClick={onShowEventModal}
-        >
-          第{currentRound}阶段（点击查看剧情）
-        </div>
-
-        {/* 倒计时 */}
-        <div className="text-white text-xs font-normal font-['Space_Grotesk']">
-          {selectionTimeLeft > 0 ? selectionTimeLeft + "s" : "请您做出选择"}
-        </div>
-      </div>
+    <div className="flex-1 w-full bg-stone-950 overflow-hidden flex flex-col p-4">
       {/* 所有玩家选择状态 */}
       {players && players.length > 0 && (
         <div className="mb-8">
@@ -175,7 +162,13 @@ export const Selection = ({
             <div className="text-green-400 text-xl font-bold mb-2">
               ✅ 已提交选择
             </div>
-            <div className="text-white">等待其他玩家...</div>
+            {waitingForPlayers ? (
+              <div className="text-white">等待其他玩家...</div>
+            ) : (
+              <div className="text-white">
+                所有玩家已提交，正在进入下一轮...
+              </div>
+            )}
           </div>
         )}
       </div>

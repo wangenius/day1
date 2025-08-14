@@ -61,6 +61,8 @@ class MessageType(str, Enum):
     ROLES_COMPLETE = "roles_complete"
     ROUND_LOADING = "round_loading"
     ROUND_START = "round_start"
+    ROUND_PHASE = "round_phase"
+    ROUND_TICK = "round_tick"
     ACTION_SUBMITTED = "action_submitted"
     ROUND_COMPLETE = "round_complete"
     GAME_COMPLETE = "game_complete"
@@ -71,7 +73,7 @@ class MessageType(str, Enum):
 class GameState(str, Enum):
     LOBBY = "lobby"
     ROLE_SELECTION = "role_selection"
-    LOADING = "loading"  # 游戏加载状态
+    LOADING = "loading"
     PLAYING = "playing"
     FINISHED = "finished"
 
@@ -95,21 +97,40 @@ class Player(BaseModel):
 
 
 class GameRoom(BaseModel):
+    # 房间ID
     room_id: str
+    # 玩家 信息 与 身份
     players: List[Player] = []
+    # 创建时间
     created_at: datetime
+    # 游戏状态： 默认为LOBBY， 可以加入玩家，其他时刻不能加入
     game_state: GameState = GameState.LOBBY
-    current_round: int = 1
-    # 废弃
-    startup_idea: Optional[str] = None
-    background: Optional[str] = None  # 本轮游戏的背景
-    dynamic_roles: Optional[Dict] = None  # 保存动态生成的角色定义
+    # 本局游戏的背景信息
+    background: Optional[str] = None
+    # 本局生成的动态角色定义
+    dynamic_roles: Optional[Dict] = None
+    # 本局游戏结果
     game_result: Optional[Dict] = None
+    # 每轮的事件和选项
+    round_events: Dict[int, Dict] = {}
+    # 每轮的私人信息
+    round_private_messages: Dict[int, Dict] = {}
+    # 动态生成的轮次信息
+    dynamic_round_info: Dict[int, str] = {}
+    # 每轮的情况
+    round_situation: Dict[int, str] = {}
+    # 当前游戏轮次： 默认为第一轮
+    current_round: int = 1
+    # 每轮的行动
     round_actions: Dict[int, List[Dict]] = {}
-    round_events: Dict[int, Dict] = {}  # 保存每轮的事件和选项
-    round_private_messages: Dict[int, Dict] = {}  # 保存每轮的私人信息
-    dynamic_round_info: Dict[int, str] = {}  # 保存动态生成的轮次信息
-    round_situation: Dict[int, str] = {}  # 保存每轮的情况
+    # 当前阶段
+    current_phase: Optional[str] = None
+    # 当前阶段倒计时
+    phase_remain: int = 180
+
+    def set_phase(self, phase: str, remain: int):
+        self.current_phase = phase
+        self.phase_remain = remain
 
     def add_player(self, player: Player) -> bool:
         """添加玩家到房间"""
@@ -118,6 +139,10 @@ class GameRoom(BaseModel):
         if existing_player:
             existing_player.is_online = True
             return True
+
+        # 人数上限：最多允许4个在线玩家加入
+        if len(self.get_online_players()) >= 4:
+            raise ValueError("房间已满，最多4人")
 
         # 如果是第一个玩家，设为房主
         if not self.players:

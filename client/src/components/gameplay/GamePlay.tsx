@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import type { PlayerAction } from "../../const/const";
+import { useEffect } from "react";
 import { useGame } from "../../context/GameContextCore";
 import { InfoAndOptions } from "./InfoAndOptions";
 import { EventDisplay } from "./EventDisplay";
@@ -17,11 +16,6 @@ const GAME_PHASES = {
   DISCUSSION: "discussion", // 3. 讨论环节
   SELECTION: "selection", // 4. 选择确认
 } as const;
-
-/**
- * 游戏阶段类型
- */
-type GamePhase = (typeof GAME_PHASES)[keyof typeof GAME_PHASES];
 
 /**
  * 角色图片映射类型
@@ -43,18 +37,24 @@ function GamePlay() {
     privateMessages,
     playerActions,
     gameBackground,
-    handleActionSubmit,
+    waitingForPlayers,
+    // UI/交互来自 Context
+    currentPhase,
+    selectedAction,
+    hasSubmitted,
+    discussionTimeLeft,
+    selectionTimeLeft,
+    showPrivateModal,
+    showEventModal,
+    setShowPrivateModal,
+    setShowEventModal,
+    goToSelection,
+    goToDiscussion,
+    selectAction,
+    submitSelectedAction,
   } = useGame();
 
-  const [selectedAction, setSelectedAction] = useState<string>("");
-  const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
-  const [currentPhase, setCurrentPhase] = useState<GamePhase>(
-    GAME_PHASES.EVENT_DISPLAY
-  );
-  const [discussionTimeLeft, setDiscussionTimeLeft] = useState<number>(120); // 讨论时间120秒
-  const [selectionTimeLeft, setSelectionTimeLeft] = useState<number>(20); // 选择时间20秒
-  const [showPrivateModal, setShowPrivateModal] = useState<boolean>(false); // 控制私人信息模态框显示
-  const [showEventModal, setShowEventModal] = useState<boolean>(false); // 控制事件详情模态框显示
+  // 移除本地状态，统一由 Context 管理
 
   /**
    * 根据角色名称确定对应的图片
@@ -75,87 +75,19 @@ function GamePlay() {
   console.log(roundEvent);
 
   useEffect(() => {
-    // 重置提交状态当新一轮开始时
-    setHasSubmitted(false);
-    setSelectedAction("");
-    setCurrentPhase(GAME_PHASES.EVENT_DISPLAY);
-    setDiscussionTimeLeft(120);
-    setSelectionTimeLeft(20);
-  }, [currentRound]);
-
-  // 阶段自动切换逻辑
-  useEffect(() => {
-    let timer: number;
-
-    if (currentPhase === GAME_PHASES.EVENT_DISPLAY) {
-      // 事件展示阶段，10秒后自动切换到信息和选项阶段
-      timer = setTimeout(() => {
-        setCurrentPhase(GAME_PHASES.INFO_AND_OPTIONS);
-      }, 10000);
-    } else if (currentPhase === GAME_PHASES.INFO_AND_OPTIONS) {
-      // 信息和选项阶段，20秒后自动切换到讨论阶段
-      timer = setTimeout(() => {
-        setCurrentPhase(GAME_PHASES.DISCUSSION);
-      }, 20000);
-    }
-
-    return () => clearTimeout(timer);
-  }, [currentPhase]);
-
-  // 讨论阶段倒计时
-  useEffect(() => {
-    let timer: number;
-
-    if (currentPhase === GAME_PHASES.DISCUSSION && discussionTimeLeft > 0) {
-      timer = setTimeout(() => {
-        setDiscussionTimeLeft((prev) => {
-          if (prev <= 1) {
-            setCurrentPhase(GAME_PHASES.SELECTION);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-
-    return () => clearTimeout(timer);
-  }, [currentPhase, discussionTimeLeft]);
-
-  // 选择阶段倒计时
-  useEffect(() => {
-    let timer: number;
-
-    if (currentPhase === GAME_PHASES.SELECTION && selectionTimeLeft > 0) {
-      timer = setTimeout(() => {
-        setSelectionTimeLeft((prev) => prev - 1);
-      }, 1000);
-    }
-
-    return () => clearTimeout(timer);
-  }, [currentPhase, selectionTimeLeft]);
+    // 阶段切换与倒计时均在 Context 统一管理
+  }, []);
 
   /**
    * 手动切换到选择阶段
    */
-  const goToSelection = (): void => {
-    setCurrentPhase(GAME_PHASES.SELECTION);
-  };
+  // goToSelection 已由 Context 提供
 
   /**
    * 处理提交行动
    */
   const handleSubmitAction = (): void => {
-    if (selectedAction) {
-      const action: PlayerAction = {
-        playerName: playerName,
-        actionType: "decision",
-        action: selectedAction,
-        round: currentRound,
-        timestamp: new Date().toISOString(),
-      };
-      handleActionSubmit(action);
-      setHasSubmitted(true);
-    }
+    submitSelectedAction();
   };
 
   const currentPlayer = players?.find((p) => p.name === playerName);
@@ -176,6 +108,7 @@ function GamePlay() {
             roundEvent={roundEvent}
             getRoleImage={getRoleImage}
             onShowEventModal={() => setShowEventModal(true)}
+            remaining={discussionTimeLeft}
           />
         );
       case GAME_PHASES.INFO_AND_OPTIONS:
@@ -189,14 +122,14 @@ function GamePlay() {
             getRoleImage={getRoleImage}
             onShowEventModal={() => setShowEventModal(true)}
             onShowPrivateModal={() => setShowPrivateModal(true)}
-            onGoToSelection={goToSelection}
+            onGoToSelection={goToDiscussion}
           />
         );
       case GAME_PHASES.DISCUSSION:
         return (
           <Discussion
             discussionTimeLeft={discussionTimeLeft}
-            onGoToSelection={() => setCurrentPhase(GAME_PHASES.SELECTION)}
+            onGoToSelection={() => goToSelection()}
           />
         );
       case GAME_PHASES.SELECTION:
@@ -209,13 +142,14 @@ function GamePlay() {
             privateMessages={privateMessages}
             selectedAction={selectedAction}
             hasSubmitted={hasSubmitted}
+            waitingForPlayers={waitingForPlayers}
             selectionTimeLeft={selectionTimeLeft}
             players={players}
             playerActions={playerActions}
             getRoleImage={getRoleImage}
             onShowEventModal={() => setShowEventModal(true)}
             onShowPrivateModal={() => setShowPrivateModal(true)}
-            onSelectAction={setSelectedAction}
+            onSelectAction={selectAction}
             onSubmitAction={handleSubmitAction}
           />
         );
@@ -234,7 +168,22 @@ function GamePlay() {
   };
 
   return (
-    <>
+    <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col">
+      {/* 顶部布局：左上角阶段，右上角用户名 */}
+      <div className="flex justify-between items-start pt-4 pb-6">
+        {/* 左上角：阶段 */}
+        <div
+          className="opacity-60 text-white text-lg font-normal font-['Cactus_Classical_Serif'] uppercase leading-normal cursor-pointer hover:opacity-80 transition-opacity duration-200"
+          onClick={() => setShowEventModal(true)}
+        >
+          第{currentRound}阶段（点击查看剧情）
+        </div>
+
+        {/* 倒计时 */}
+        <div className="text-white text-xs font-normal font-['Space_Grotesk']">
+          {selectionTimeLeft > 0 ? selectionTimeLeft + "s" : "请您做出选择"}
+        </div>
+      </div>
       {renderPhaseContent()}
       <PrivateModal
         isOpen={showPrivateModal}
@@ -251,7 +200,7 @@ function GamePlay() {
         gameBackground={gameBackground}
         onClose={() => setShowEventModal(false)}
       />
-    </>
+    </div>
   );
 }
 

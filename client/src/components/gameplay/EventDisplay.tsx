@@ -7,6 +7,7 @@ interface EventDisplayProps {
   roundEvent: any;
   getRoleImage: (role: string) => string;
   onShowEventModal: () => void;
+  remaining?: number;
 }
 
 /**
@@ -18,7 +19,8 @@ export const EventDisplay = ({
   currentRound,
   roundEvent,
   getRoleImage,
-  onShowEventModal
+  onShowEventModal,
+  remaining
 }: EventDisplayProps) => {
   return (
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col p-4">
@@ -40,7 +42,7 @@ export const EventDisplay = ({
               onClick={onShowEventModal}
             >
               <span className="text-amber-300 text-lg font-normal font-['Cactus_Classical_Serif'] uppercase">
-                第{currentRound}阶段
+                第{currentRound}阶段 {typeof remaining === 'number' ? `· ${remaining}s` : ''}
               </span>
             </div>
           </div>

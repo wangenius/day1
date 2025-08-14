@@ -76,6 +76,37 @@ export interface GameContextType {
   handleExitRoom: () => void;
   /** 获取房间列表 */
   fetchRoomList: () => Promise<void>;
+
+  // ========== 前端阶段与交互状态（从 GamePlay 提升） ==========
+  /** 当前前端阶段：event_display | info_and_options | discussion | selection */
+  currentPhase: string;
+  /** 讨论阶段剩余秒数 */
+  discussionTimeLeft: number;
+  /** 选择阶段剩余秒数 */
+  selectionTimeLeft: number;
+  /** 当前已选择的选项键（如 A/B/C） */
+  selectedAction: string;
+  /** 本地是否已提交（与服务端 playerActions 同步） */
+  hasSubmitted: boolean;
+  /** 是否显示私人信息弹窗 */
+  showPrivateModal: boolean;
+  /** 是否显示事件详情弹窗 */
+  showEventModal: boolean;
+
+  /** 切换到选择阶段 */
+  goToSelection: () => void;
+  /** 切换到信息与选项阶段 */
+  goToInfoAndOptions: () => void;
+  /** 切换到讨论阶段 */
+  goToDiscussion: () => void;
+  /** 选择某个选项 */
+  selectAction: (actionKey: string) => void;
+  /** 提交当前选择（封装发送 + 本地提交态） */
+  submitSelectedAction: () => void;
+  /** 显示/关闭私人信息弹窗 */
+  setShowPrivateModal: (open: boolean) => void;
+  /** 显示/关闭事件详情弹窗 */
+  setShowEventModal: (open: boolean) => void;
 }
 
 /**

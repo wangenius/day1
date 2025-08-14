@@ -43,9 +43,14 @@ class WebSocketHandler:
             player = room.get_player(player_name)
             if not player:
                 # 玩家不在房间中，需要加入
-                room = room_manager.join_room(player_name, room_id)
-                player = room.get_player(player_name)
-                is_reconnect = False
+                try:
+                    room = room_manager.join_room(player_name, room_id)
+                    player = room.get_player(player_name)
+                    is_reconnect = False
+                except ValueError as e:
+                    # 房间满员等情况，直接关闭连接并给出原因
+                    await websocket.close(code=4005, reason=str(e))
+                    return
             else:
                 # 玩家已在房间中，设置为在线状态（重连）
                 player.is_online = True
@@ -189,8 +194,10 @@ class WebSocketHandler:
             if message_type == "startup_idea":
                 await game_handler.handle_startup_idea(player_name, data.get("idea"))
             elif message_type == "start_game":
+                # 房主开始以游戏
                 await game_handler.handle_start_game(player_name)
             elif message_type == "select_role":
+                # 玩家选择角色
                 await game_handler.handle_role_selection(player_name, data.get("role"))
             elif message_type == "game_action":
                 await game_handler.handle_game_action(player_name, data)
