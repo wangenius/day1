@@ -2,7 +2,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 import json
 import logging
 
-from room import  MessageType
+from room import MessageType, GameState
 from connection_manager import connection_manager
 from room_manager import room_manager
 from game_handler import game_handler
@@ -138,11 +138,11 @@ class WebSocketHandler:
             }
 
             # 根据游戏状态添加特定信息
-            if room.game_state == "loading":
+            if room.game_state == GameState.LOADING:
                 connection_data["data"][
                     "loading_message"
                 ] = f"AI正在生成第{room.current_round}轮事件，请稍候..."
-            elif room.game_state == "playing":
+            elif room.game_state == GameState.PLAYING:
                 # 包含当前轮次的事件和私人信息
                 if room.round_events and room.current_round in room.round_events:
                     connection_data["data"]["roundEvent"] = room.round_events[

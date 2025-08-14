@@ -59,10 +59,11 @@ class GameHandler:
                     if not room or room.game_state != GameState.PLAYING:
                         logger.info(f"[TICK] 房间 {room_id} 不在PLAYING，停止tick")
                         break
-                    # 计算剩余时间
-                    remaining = 0
-                    if room.current_phase and room.phase_remain:
-                        remaining = room.phase_remain
+                    # 倒计时递减并计算剩余时间
+                    if room.current_phase and isinstance(room.phase_remain, int):
+                        if room.phase_remain > 0:
+                            room.phase_remain = max(room.phase_remain - 1, 0)
+                    remaining = room.phase_remain if isinstance(room.phase_remain, int) else 0
                     current_round = room.current_round
                     round_event = room.round_events.get(current_round)
                     private_messages = room.round_private_messages.get(current_round)
@@ -95,6 +96,52 @@ class GameHandler:
                     logger.info(
                         f"[TICK] 房间 {room_id} r={current_round} phase={room.current_phase} remaining={remaining} actions={len(player_actions)} waiting={waiting_for}"
                     )
+
+                    # 若讨论阶段时间已到且仍有人未提交，则立即为未提交玩家自动提交并推进回合
+                    if (
+                        room.current_phase == "discussion"
+                        and remaining == 0
+                        and waiting_for
+                    ):
+                        try:
+                            # 获取可选项
+                            decision_options = {}
+                            try:
+                                event_obj = room.round_events.get(current_round, {})
+                                if isinstance(event_obj, dict):
+                                    decision_options = event_obj.get("decision_options", {})
+                            except Exception:
+                                decision_options = {}
+
+                            option_keys = list(decision_options.keys()) or ["A", "B", "C"]
+
+                            # 计算未提交的在线玩家
+                            online_players = room.get_online_players()
+                            submitted = set()
+                            if current_round in room.round_actions:
+                                for a in room.round_actions[current_round]:
+                                    submitted.add(a.get("playerName"))
+
+                            missing_players = [p for p in online_players if p.name not in submitted]
+
+                            # 为每个未提交玩家自动提交
+                            for p in missing_players:
+                                try:
+                                    auto_choice = random.choice(option_keys)
+                                    await GameHandler.handle_game_action(
+                                        p.name,
+                                        {"action": auto_choice, "reason": "phase_end_auto"},
+                                    )
+                                    logger.info(
+                                        f"玩家 {p.name} 讨论阶段结束未提交，系统自动选择并提交: {auto_choice}"
+                                    )
+                                except Exception as e:
+                                    logger.error(f"为玩家 {p.name} 阶段结束自动提交失败: {e}")
+
+                            # 本轮处理完成后，结束当前tick循环。下一轮会重新启动tick。
+                            break
+                        except Exception as e:
+                            logger.error(f"讨论阶段结束自动提交流程失败: {e}")
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
@@ -599,7 +646,6 @@ class GameHandler:
                     "data": {
                         "phase": "event_display",
                         "round": 1,
-                        "remaining": room.phase_duration_seconds,
                     },
                 },
             )
@@ -629,6 +675,9 @@ class GameHandler:
                 r = room_manager.get_room(room_id)
                 if not r or r.current_round != 1 or r.game_state != GameState.PLAYING:
                     return
+                # 仅当仍处于 event_display 时才推进
+                if r.current_phase != "event_display":
+                    return
                 r.set_phase("info_and_options", 20)
                 await connection_manager.broadcast_to_room(
                     room_id,
@@ -637,7 +686,6 @@ class GameHandler:
                         "data": {
                             "phase": "info_and_options",
                             "round": 1,
-                            "remaining": r.phase_duration_seconds,
                         },
                     },
                 )
@@ -645,6 +693,9 @@ class GameHandler:
             async def _to_discussion_first():
                 r = room_manager.get_room(room_id)
                 if not r or r.current_round != 1 or r.game_state != GameState.PLAYING:
+                    return
+                # 仅当仍处于 info_and_options 时才推进
+                if r.current_phase != "info_and_options":
                     return
                 r.set_phase("discussion", 120)
                 await connection_manager.broadcast_to_room(
@@ -654,7 +705,6 @@ class GameHandler:
                         "data": {
                             "phase": "discussion",
                             "round": 1,
-                            "remaining": r.phase_duration_seconds,
                         },
                     },
                 )
@@ -684,6 +734,12 @@ class GameHandler:
             )
         except Exception as e:
             logger.error(f"安排第1轮超时自动提交任务失败: {e}")
+
+        # 启动本房间的每秒心跳
+        try:
+            GameHandler._start_round_tick(room_id)
+        except Exception as e:
+            logger.error(f"启动房间 {room_id} 心跳失败: {e}")
 
     @staticmethod
     async def handle_game_action(player_name: str, action_data: Dict):
@@ -860,7 +916,6 @@ class GameHandler:
                     "data": {
                         "phase": "event_display",
                         "round": room.current_round,
-                        "remaining": room.phase_duration_seconds,
                     },
                 },
             )
@@ -896,6 +951,9 @@ class GameHandler:
                     or r.game_state != GameState.PLAYING
                 ):
                     return
+                # 仅当仍处于 event_display 时才推进
+                if r.current_phase != "event_display":
+                    return
                 r.set_phase("info_and_options", 20)
                 await connection_manager.broadcast_to_room(
                     room_id,
@@ -904,7 +962,6 @@ class GameHandler:
                         "data": {
                             "phase": "info_and_options",
                             "round": r.current_round,
-                            "remaining": r.phase_duration_seconds,
                         },
                     },
                 )
@@ -918,6 +975,9 @@ class GameHandler:
                     or r.game_state != GameState.PLAYING
                 ):
                     return
+                # 仅当仍处于 info_and_options 时才推进
+                if r.current_phase != "info_and_options":
+                    return
                 r.set_phase("discussion", 120)
                 await connection_manager.broadcast_to_room(
                     room_id,
@@ -926,7 +986,6 @@ class GameHandler:
                         "data": {
                             "phase": "discussion",
                             "round": r.current_round,
-                            "remaining": r.phase_duration_seconds,
                         },
                     },
                 )
@@ -957,6 +1016,12 @@ class GameHandler:
             )
         except Exception as e:
             logger.error(f"安排回合超时任务失败: {e}")
+
+        # 启动/重启房间的每秒心跳
+        try:
+            GameHandler._start_round_tick(room_id)
+        except Exception as e:
+            logger.error(f"启动房间 {room_id} 心跳失败: {e}")
 
     @staticmethod
     async def handle_restart_game(player_name: str):

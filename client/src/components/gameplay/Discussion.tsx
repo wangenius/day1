@@ -1,15 +1,11 @@
 interface DiscussionProps {
-  discussionTimeLeft: number;
   onGoToSelection: () => void;
 }
 
 /**
  * 3. 讨论环节组件
  */
-export const Discussion = ({
-  discussionTimeLeft,
-  onGoToSelection
-}: DiscussionProps) => {
+export const Discussion = ({ onGoToSelection }: DiscussionProps) => {
   return (
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col p-4">
       {/* 标题区域 */}
@@ -38,15 +34,6 @@ export const Discussion = ({
         >
           进入选择阶段
         </button>
-
-        {/* 倒计时 */}
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-full border border-white flex items-center justify-center">
-            <span className="text-white text-base font-normal font-['Cactus_Classical_Serif']">
-              {discussionTimeLeft}s
-            </span>
-          </div>
-        </div>
       </div>
     </div>
   );

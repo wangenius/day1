@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { useGame } from "../../context/GameContextCore";
 import { InfoAndOptions } from "./InfoAndOptions";
 import { EventDisplay } from "./EventDisplay";
-import { Discussion } from "./Discussion";
 import { PrivateModal } from "./PrivateModal";
 import { EventModal } from "./EventModal";
 import { Selection } from "./Selection";
@@ -42,14 +41,12 @@ function GamePlay() {
     currentPhase,
     selectedAction,
     hasSubmitted,
-    discussionTimeLeft,
-    selectionTimeLeft,
+    timeLeft,
     showPrivateModal,
     showEventModal,
     setShowPrivateModal,
     setShowEventModal,
     goToSelection,
-    goToDiscussion,
     selectAction,
     submitSelectedAction,
   } = useGame();
@@ -108,7 +105,6 @@ function GamePlay() {
             roundEvent={roundEvent}
             getRoleImage={getRoleImage}
             onShowEventModal={() => setShowEventModal(true)}
-            remaining={discussionTimeLeft}
           />
         );
       case GAME_PHASES.INFO_AND_OPTIONS:
@@ -122,14 +118,21 @@ function GamePlay() {
             getRoleImage={getRoleImage}
             onShowEventModal={() => setShowEventModal(true)}
             onShowPrivateModal={() => setShowPrivateModal(true)}
-            onGoToSelection={goToDiscussion}
+            onGoToSelection={goToSelection}
           />
         );
       case GAME_PHASES.DISCUSSION:
         return (
-          <Discussion
-            discussionTimeLeft={discussionTimeLeft}
-            onGoToSelection={() => goToSelection()}
+          <InfoAndOptions
+            playerName={playerName}
+            playerRole={playerRole}
+            currentRound={currentRound}
+            roundEvent={roundEvent}
+            privateMessages={privateMessages}
+            getRoleImage={getRoleImage}
+            onShowEventModal={() => setShowEventModal(true)}
+            onShowPrivateModal={() => setShowPrivateModal(true)}
+            onGoToSelection={goToSelection}
           />
         );
       case GAME_PHASES.SELECTION:
@@ -143,7 +146,6 @@ function GamePlay() {
             selectedAction={selectedAction}
             hasSubmitted={hasSubmitted}
             waitingForPlayers={waitingForPlayers}
-            selectionTimeLeft={selectionTimeLeft}
             players={players}
             playerActions={playerActions}
             getRoleImage={getRoleImage}
@@ -181,7 +183,7 @@ function GamePlay() {
 
         {/* 倒计时 */}
         <div className="text-white text-xs font-normal font-['Space_Grotesk']">
-          {selectionTimeLeft > 0 ? selectionTimeLeft + "s" : "请您做出选择"}
+          {timeLeft + "s"}
         </div>
       </div>
       {renderPhaseContent()}

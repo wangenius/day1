@@ -101,6 +101,8 @@ class GameRoom(BaseModel):
     room_id: str
     # 玩家 信息 与 身份
     players: List[Player] = []
+    # 团队选定的统一创业想法
+    startup_idea: Optional[str] = None
     # 创建时间
     created_at: datetime
     # 游戏状态： 默认为LOBBY， 可以加入玩家，其他时刻不能加入
@@ -647,7 +649,8 @@ class GameRoom(BaseModel):
                 1
                 for round_actions in self.round_actions.values()
                 for action in round_actions
-                if action.get("player") == player.name
+                if (action.get("player") == player.name)
+                or (action.get("playerName") == player.name)
             )
 
             performance.append(
@@ -782,6 +785,7 @@ class GameRoom(BaseModel):
         self.round_events = {}  # 重置轮次事件
         self.round_private_messages = {}  # 重置私人信息
         self.dynamic_round_info = {}  # 重置动态轮次信息
+        self.round_situation = {}  # 重置历史分析/情况
 
         # 重置玩家的游戏相关状态，但保留玩家名称和房主状态
         for player in self.players:

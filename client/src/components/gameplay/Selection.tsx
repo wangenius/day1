@@ -11,7 +11,6 @@ interface SelectionProps {
   selectedAction: string;
   hasSubmitted: boolean;
   waitingForPlayers: boolean;
-  selectionTimeLeft: number;
   players: any[];
   playerActions: any[];
   getRoleImage: (role: string) => string;
@@ -33,11 +32,9 @@ export const Selection = ({
   selectedAction,
   hasSubmitted,
   waitingForPlayers,
-  selectionTimeLeft,
   players,
   playerActions,
   getRoleImage,
-  onShowEventModal,
   onShowPrivateModal,
   onSelectAction,
   onSubmitAction,

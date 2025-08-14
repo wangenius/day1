@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState, ReactNode } from "react";
-import { 
-  GAME_STATES, 
-  type GameState, 
-  type ServerConfig, 
-  type Player, 
-  type RoundEvent, 
-  type PlayerAction, 
-  type GameResult, 
+import {
+  GAME_STATES,
+  type GameState,
+  type ServerConfig,
+  type Player,
+  type RoundEvent,
+  type PlayerAction,
+  type GameResult,
   type RoleDefinition,
   type WebSocketMessage,
   type RoomStatus,
   type RoomInfo,
-  type RoomListResponse
+  type RoomListResponse,
 } from "../const/const";
 import { GameContext, type GameContextType } from "./GameContextCore";
 
@@ -83,54 +83,59 @@ interface SystemMessage {
  */
 export function GameProvider({ children }: GameProviderProps) {
   // ==================== 基础状态 ====================
-  
+
   /** 当前游戏状态 */
   const [gameState, setGameState] = useState<GameState>(GAME_STATES.INITIAL);
-  
+
   /** 当前玩家名称 */
   const [playerName, setPlayerName] = useState<string>("");
-  
+
   /** 当前房间ID */
   const [currentRoom, setCurrentRoom] = useState<string>("");
-  
+
   /** 房间内所有玩家列表 */
   const [players, setPlayers] = useState<Player[]>([]);
-  
+
   /** WebSocket连接状态 */
   const [wsConnected, setWsConnected] = useState<boolean>(false);
 
   // ==================== 游戏相关状态 ====================
-  
+
   /** 当前游戏轮次 */
   const [currentRound, setCurrentRound] = useState<number>(1);
-  
+
   /** 当前轮次的事件信息 */
   const [roundEvent, setRoundEvent] = useState<RoundEvent | null>(null);
-  
+
   /** 玩家私人消息，key为玩家名，value为消息内容 */
-  const [privateMessages, setPrivateMessages] = useState<Record<string, string>>({});
-  
+  const [privateMessages, setPrivateMessages] = useState<
+    Record<string, string>
+  >({});
+
   /** 玩家行动列表，存储所有玩家的行动记录 */
   const [playerActions, setPlayerActions] = useState<PlayerAction[]>([]);
-  
+
   /** 游戏结果数据 */
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
-  
+
   /** 已选择的角色列表 */
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
-  
+
   /** 是否正在等待其他玩家 */
   const [waitingForPlayers, setWaitingForPlayers] = useState<boolean>(false);
-  
+
   /** 游戏背景故事 */
   const [gameBackground, setGameBackground] = useState<string | null>(null);
-  
+
   /** 角色定义数据 */
-  const [roleDefinitions, setRoleDefinitions] = useState<Record<string, RoleDefinition> | null>(null);
-  
+  const [roleDefinitions, setRoleDefinitions] = useState<Record<
+    string,
+    RoleDefinition
+  > | null>(null);
+
   /** 房间列表数据 */
   const [roomList, setRoomList] = useState<RoomInfo[]>([]);
-  
+
   /** 是否正在加载房间列表 */
   const [loadingRoomList, setLoadingRoomList] = useState<boolean>(false);
 
@@ -143,11 +148,11 @@ export function GameProvider({ children }: GameProviderProps) {
   } as const;
 
   /** 当前前端阶段 */
-  const [currentPhase, setCurrentPhase] = useState<string>(UI_GAME_PHASES.EVENT_DISPLAY);
+  const [currentPhase, setCurrentPhase] = useState<string>(
+    UI_GAME_PHASES.EVENT_DISPLAY
+  );
   /** 讨论倒计时（秒） */
-  const [discussionTimeLeft, setDiscussionTimeLeft] = useState<number>(120);
-  /** 选择倒计时（秒） */
-  const [selectionTimeLeft, setSelectionTimeLeft] = useState<number>(20);
+  const [timeLeft, setTimeLeft] = useState<number>(180);
   /** 当前选择的选项键 */
   const [selectedAction, setSelectedAction] = useState<string>("");
   /** 是否已提交（与服务端同步） */
@@ -158,20 +163,20 @@ export function GameProvider({ children }: GameProviderProps) {
   const [showEventModal, setShowEventModal] = useState<boolean>(false);
 
   // ==================== 内部状态 ====================
-  
+
   /** 消息列表（当前未使用） */
   const [, setMessages] = useState<SystemMessage[]>([]);
 
   // ==================== 引用对象 ====================
-  
+
   /** WebSocket连接引用 */
   const wsRef = useRef<WebSocket | null>(null);
-  
+
   /** 背景音乐引用 */
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // ==================== Effect钩子 ====================
-  
+
   /**
    * 初始化背景音乐
    * 设置音频循环播放，处理自动播放策略限制
@@ -221,7 +226,7 @@ export function GameProvider({ children }: GameProviderProps) {
   }, []);
 
   // ==================== 工具函数 ====================
-  
+
   /**
    * 添加系统消息
    * @param content - 消息内容
@@ -244,8 +249,8 @@ export function GameProvider({ children }: GameProviderProps) {
    * @param savedGameState - 游戏状态
    */
   const saveGameState = (
-    savedPlayerName?: string | null, 
-    roomId?: string | null, 
+    savedPlayerName?: string | null,
+    roomId?: string | null,
     savedGameState?: GameState | null
   ): void => {
     if (savedPlayerName)
@@ -265,7 +270,7 @@ export function GameProvider({ children }: GameProviderProps) {
   };
 
   // ==================== WebSocket消息处理 ====================
-  
+
   /**
    * 处理WebSocket接收到的消息
    * 根据消息类型执行相应的状态更新和UI变化
@@ -313,7 +318,9 @@ export function GameProvider({ children }: GameProviderProps) {
         // 设置角色定义
         if (message.data && message.data.roles) {
           console.log("GameContext - 设置角色定义:", message.data.roles);
-          setRoleDefinitions(message.data.roles as Record<string, RoleDefinition>);
+          setRoleDefinitions(
+            message.data.roles as Record<string, RoleDefinition>
+          );
         } else {
           console.log("GameContext - 没有角色定义数据");
         }
@@ -331,7 +338,9 @@ export function GameProvider({ children }: GameProviderProps) {
         }
         if (message.data && message.data.roles) {
           console.log("GameContext - 设置角色定义:", message.data.roles);
-          setRoleDefinitions(message.data.roles as Record<string, RoleDefinition>);
+          setRoleDefinitions(
+            message.data.roles as Record<string, RoleDefinition>
+          );
         } else {
           console.log("GameContext - 没有角色定义数据");
         }
@@ -351,10 +360,7 @@ export function GameProvider({ children }: GameProviderProps) {
       case "game_started":
         setGameState(GAME_STATES.PLAYING);
         setCurrentRound(1);
-        // 初始化前端阶段与倒计时/提交态
         setCurrentPhase(UI_GAME_PHASES.EVENT_DISPLAY);
-        setDiscussionTimeLeft(120);
-        setSelectionTimeLeft(20);
         setSelectedAction("");
         setHasSubmitted(false);
         setPlayerActions([]);
@@ -369,7 +375,9 @@ export function GameProvider({ children }: GameProviderProps) {
         }
         // 设置私人消息
         if (message.data.privateMessages) {
-          setPrivateMessages(message.data.privateMessages as Record<string, string>);
+          setPrivateMessages(
+            message.data.privateMessages as Record<string, string>
+          );
         }
         saveGameState(playerName, currentRoom, GAME_STATES.PLAYING);
         addMessage("🎯 游戏正式开始");
@@ -385,12 +393,10 @@ export function GameProvider({ children }: GameProviderProps) {
       case "round_start":
         setGameState(GAME_STATES.PLAYING);
         setCurrentRound(message.data.round as number);
-    // 重置前端阶段/倒计时/提交态
-    setCurrentPhase(UI_GAME_PHASES.EVENT_DISPLAY);
-    setDiscussionTimeLeft(120);
-    setSelectionTimeLeft(20);
-    setSelectedAction("");
-    setHasSubmitted(false);
+        // 重置前端阶段/倒计时/提交态
+        setCurrentPhase(UI_GAME_PHASES.EVENT_DISPLAY);
+        setSelectedAction("");
+        setHasSubmitted(false);
         // 更新轮次事件
         if (message.data.roundEvent) {
           setRoundEvent(message.data.roundEvent as RoundEvent);
@@ -401,7 +407,9 @@ export function GameProvider({ children }: GameProviderProps) {
         }
         // 更新私人消息
         if (message.data.privateMessages) {
-          setPrivateMessages(message.data.privateMessages as Record<string, string>);
+          setPrivateMessages(
+            message.data.privateMessages as Record<string, string>
+          );
         }
         // 重置玩家行动和等待状态
         setPlayerActions([]);
@@ -411,13 +419,13 @@ export function GameProvider({ children }: GameProviderProps) {
       case "action_submitted":
         setPlayerActions(message.data.playerActions as PlayerAction[]);
         setWaitingForPlayers(message.data.waitingForPlayers as boolean);
-    // 同步本地提交态（兼容断线重连/超时自动提交）
-    try {
-      const hasMe = (message.data.playerActions as PlayerAction[]).some(
-        (a) => a.playerName === playerName && a.round === currentRound
-      );
-      setHasSubmitted(Boolean(hasMe));
-    } catch {}
+        // 同步本地提交态（兼容断线重连/超时自动提交）
+        try {
+          const hasMe = (message.data.playerActions as PlayerAction[]).some(
+            (a) => a.playerName === playerName && a.round === currentRound
+          );
+          setHasSubmitted(Boolean(hasMe));
+        } catch {}
         // 若为第5轮且所有玩家已提交，但尚未收到服务器的 game_loading，先本地进入结算加载
         if (!message.data.waitingForPlayers && currentRound >= 5) {
           setGameState(GAME_STATES.LOADING);
@@ -427,6 +435,10 @@ export function GameProvider({ children }: GameProviderProps) {
         break;
       // 后端主导的UI阶段
       case "round_phase":
+        // 若已经在选择阶段，忽略回退到较早阶段（如 info_and_options / discussion）的广播，避免 UI 抖动
+        if (currentPhase === UI_GAME_PHASES.SELECTION) {
+          break;
+        }
         switch (message.data.phase as string) {
           case "event_display":
             setCurrentPhase(UI_GAME_PHASES.EVENT_DISPLAY);
@@ -435,7 +447,7 @@ export function GameProvider({ children }: GameProviderProps) {
             setCurrentPhase(UI_GAME_PHASES.INFO_AND_OPTIONS);
             break;
           case "discussion":
-            setCurrentPhase(UI_GAME_PHASES.DISCUSSION);
+            // setCurrentPhase(UI_GAME_PHASES.DISCUSSION);
             break;
           case "selection":
             setCurrentPhase(UI_GAME_PHASES.SELECTION);
@@ -443,28 +455,32 @@ export function GameProvider({ children }: GameProviderProps) {
           default:
             break;
         }
+        // remaining 的更新统一由 round_tick 驱动，避免中途被不同来源覆盖
         break;
       // 每秒后端心跳：同步整轮状态（单一真相源）
       case "round_tick": {
         const d = message.data as any;
         // 基本字段
         if (typeof d.round === "number") setCurrentRound(d.round);
-        if (typeof d.phase === "string") setCurrentPhase(d.phase);
+        // if (typeof d.phase === "string") setCurrentPhase(d.phase);
         // 剩余时间：根据阶段设置（仅用于显示，不再本地倒计时推进阶段）
         if (typeof d.remaining === "number") {
-          if (d.phase === UI_GAME_PHASES.DISCUSSION) setDiscussionTimeLeft(d.remaining);
-          if (d.phase === UI_GAME_PHASES.SELECTION) setSelectionTimeLeft(d.remaining);
+          setTimeLeft(d.remaining);
         }
         // 同步当轮事件/私信
         if (d.roundEvent) setRoundEvent(d.roundEvent as RoundEvent);
-        if (d.privateMessages) setPrivateMessages(d.privateMessages as Record<string, string>);
+        if (d.privateMessages)
+          setPrivateMessages(d.privateMessages as Record<string, string>);
         // 同步行动/等待
-        if (Array.isArray(d.playerActions)) setPlayerActions(d.playerActions as PlayerAction[]);
-        if (typeof d.waitingForPlayers === "boolean") setWaitingForPlayers(d.waitingForPlayers as boolean);
+        if (Array.isArray(d.playerActions))
+          setPlayerActions(d.playerActions as PlayerAction[]);
+        if (typeof d.waitingForPlayers === "boolean")
+          setWaitingForPlayers(d.waitingForPlayers as boolean);
         // 用playerActions矫正本地 hasSubmitted
         try {
           const hasMe = (d.playerActions as PlayerAction[] | undefined)?.some(
-            (a) => a.playerName === playerName && a.round === (d.round as number)
+            (a) =>
+              a.playerName === playerName && a.round === (d.round as number)
           );
           setHasSubmitted(Boolean(hasMe));
         } catch {}
@@ -502,7 +518,7 @@ export function GameProvider({ children }: GameProviderProps) {
   };
 
   // ==================== WebSocket连接管理 ====================
-  
+
   /**
    * 建立WebSocket连接
    * @param player - 玩家名称
@@ -546,7 +562,7 @@ export function GameProvider({ children }: GameProviderProps) {
      */
     wsRef.current.onmessage = (event: MessageEvent): void => {
       const message = JSON.parse(event.data) as WebSocketMessage;
-      
+
       // 处理连接成功消息
       if (message.type === "connection_success") {
         setWsConnected(true);
@@ -554,14 +570,14 @@ export function GameProvider({ children }: GameProviderProps) {
 
         // 解构服务器返回的状态数据
         const {
-          is_reconnect,        // 是否为重新连接
-          game_state,          // 当前游戏状态
-          current_round,       // 当前轮次
+          is_reconnect, // 是否为重新连接
+          game_state, // 当前游戏状态
+          current_round, // 当前轮次
           players: playersData, // 玩家列表
-          selected_roles,      // 已选择的角色
-          player_actions,      // 玩家行动
-          game_result,         // 游戏结果
-          background,          // 游戏背景
+          selected_roles, // 已选择的角色
+          player_actions, // 玩家行动
+          game_result, // 游戏结果
+          background, // 游戏背景
           dynamic_roles: roles, // 动态角色定义
         } = message.data;
 
@@ -570,7 +586,7 @@ export function GameProvider({ children }: GameProviderProps) {
         // 处理重新连接的情况
         if (is_reconnect) {
           addMessage(`🔄 重新连接到房间: ${roomId}`);
-          
+
           // 根据服务器状态恢复游戏状态
           switch (game_state) {
             case "lobby":
@@ -580,7 +596,8 @@ export function GameProvider({ children }: GameProviderProps) {
               setGameState(GAME_STATES.ROLE_SELECTION);
               if (selected_roles) setSelectedRoles(selected_roles as string[]);
               if (background) setGameBackground(background as string);
-              if (roles) setRoleDefinitions(roles as Record<string, RoleDefinition>);
+              if (roles)
+                setRoleDefinitions(roles as Record<string, RoleDefinition>);
               break;
             case "loading":
               // 与服务端的通用加载（包括最终结算加载）对齐为 LOADING
@@ -591,12 +608,15 @@ export function GameProvider({ children }: GameProviderProps) {
             case "playing":
               setGameState(GAME_STATES.PLAYING);
               setCurrentRound((current_round as number) || 1);
-              if (player_actions) setPlayerActions(player_actions as PlayerAction[]);
+              if (player_actions)
+                setPlayerActions(player_actions as PlayerAction[]);
               if (background) setGameBackground(background as string);
               if (message.data.roundEvent)
                 setRoundEvent(message.data.roundEvent as RoundEvent);
               if (message.data.privateMessages)
-                setPrivateMessages(message.data.privateMessages as Record<string, string>);
+                setPrivateMessages(
+                  message.data.privateMessages as Record<string, string>
+                );
               break;
             case "finished":
               setGameState(GAME_STATES.RESULT);
@@ -614,7 +634,8 @@ export function GameProvider({ children }: GameProviderProps) {
             playing: GAME_STATES.PLAYING,
             finished: GAME_STATES.RESULT,
           };
-          const currentGameState = stateMapping[game_state as string] || GAME_STATES.LOBBY;
+          const currentGameState =
+            stateMapping[game_state as string] || GAME_STATES.LOBBY;
           saveGameState(player, roomId, currentGameState);
         } else {
           // 新连接，进入大厅状态
@@ -635,7 +656,12 @@ export function GameProvider({ children }: GameProviderProps) {
     wsRef.current.onclose = (event: CloseEvent): void => {
       setWsConnected(false);
       // 根据关闭代码显示相应的错误信息
-      if (event.code === 4004 || event.code === 4000 || event.code === 4001 || event.code === 4005) {
+      if (
+        event.code === 4004 ||
+        event.code === 4000 ||
+        event.code === 4001 ||
+        event.code === 4005
+      ) {
         addMessage(`❌ ${event.reason}`, "error");
       } else {
         addMessage("WebSocket连接关闭");
@@ -660,15 +686,15 @@ export function GameProvider({ children }: GameProviderProps) {
    * @param savedState - 保存的游戏状态
    */
   const reconnectToRoom = async (
-    player: string, 
-    roomId: string, 
+    player: string,
+    roomId: string,
     savedState: GameState
   ): Promise<void> => {
     try {
       // 检查房间状态
       const response = await fetch(`${API_BASE}/rooms/${roomId}/status`);
       if (response.ok) {
-        const roomStatus = await response.json() as RoomStatus;
+        const roomStatus = (await response.json()) as RoomStatus;
         addMessage(`房间 ${roomId} 存在，玩家数: ${roomStatus.player_count}`);
         // 恢复游戏状态并重新连接
         setGameState(savedState);
@@ -681,7 +707,8 @@ export function GameProvider({ children }: GameProviderProps) {
       }
     } catch (error) {
       // 网络错误或其他异常
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       addMessage(
         `检查房间状态失败: ${errorMessage}，返回房间选择页面`,
         "error"
@@ -698,12 +725,14 @@ export function GameProvider({ children }: GameProviderProps) {
   useEffect(() => {
     const savedPlayerName = localStorage.getItem("startup_player_name");
     const savedRoomId = localStorage.getItem("startup_room_id");
-    const savedGameState = localStorage.getItem("startup_game_state") as GameState;
+    const savedGameState = localStorage.getItem(
+      "startup_game_state"
+    ) as GameState;
 
     if (savedPlayerName) {
       setPlayerName(savedPlayerName);
       addMessage(`欢迎回来, ${savedPlayerName}!`);
-      
+
       // 如果有保存的房间和游戏状态，尝试重新连接
       if (savedRoomId && savedGameState) {
         setCurrentRoom(savedRoomId);
@@ -733,7 +762,7 @@ export function GameProvider({ children }: GameProviderProps) {
   }, [playerName]);
 
   // ==================== 事件处理函数 ====================
-  
+
   /**
    * 处理首页点击事件
    * 从初始页面进入欢迎页面
@@ -757,7 +786,10 @@ export function GameProvider({ children }: GameProviderProps) {
    * @param _action - 操作类型（当前未使用）
    * @param roomId - 房间ID
    */
-  const handleRoomAction = async (_action: string, roomId: string): Promise<void> => {
+  const handleRoomAction = async (
+    _action: string,
+    roomId: string
+  ): Promise<void> => {
     try {
       const apiUrl = `${API_BASE}/rooms/create`;
       addMessage(`正在进入房间: ${roomId}`);
@@ -774,7 +806,10 @@ export function GameProvider({ children }: GameProviderProps) {
         body: JSON.stringify(requestBody),
       });
 
-      const data = await response.json() as { success: boolean; message?: string };
+      const data = (await response.json()) as {
+        success: boolean;
+        message?: string;
+      };
 
       if (data.success) {
         addMessage(`成功进入房间 ${roomId}`);
@@ -784,7 +819,8 @@ export function GameProvider({ children }: GameProviderProps) {
         addMessage(data.message || "进入房间失败", "error");
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       addMessage(`进入房间失败: ${errorMessage}`, "error");
     }
   };
@@ -811,23 +847,24 @@ export function GameProvider({ children }: GameProviderProps) {
   const handleRoleSelect = (roleId: string): void => {
     console.log("GameContext handleRoleSelect - 开始执行，角色ID:", roleId);
     console.log("GameContext handleRoleSelect - wsConnected:", wsConnected);
-    
+
     // 立即更新本地玩家状态，提供即时反馈
-    setPlayers(prevPlayers => 
-      prevPlayers.map(player => 
-        player.name === playerName 
-          ? { ...player, role: roleId }
-          : player
+    setPlayers((prevPlayers) =>
+      prevPlayers.map((player) =>
+        player.name === playerName ? { ...player, role: roleId } : player
       )
     );
-    
+
     // 更新已选择的角色列表
-    setSelectedRoles(prevRoles => {
+    setSelectedRoles((prevRoles) => {
       const newRoles = [...prevRoles, roleId];
-      console.log("GameContext handleRoleSelect - 更新selectedRoles:", newRoles);
+      console.log(
+        "GameContext handleRoleSelect - 更新selectedRoles:",
+        newRoles
+      );
       return newRoles;
     });
-    
+
     if (wsRef.current && wsConnected) {
       const message = {
         type: "select_role",
@@ -906,16 +943,16 @@ export function GameProvider({ children }: GameProviderProps) {
       wsRef.current.close();
       wsRef.current = null;
     }
-    
+
     // 清除保存的游戏状态
     clearSavedState();
-    
+
     // 重置相关状态
     setWsConnected(false);
     setCurrentRoom("");
     setPlayers([]);
     setGameState(GAME_STATES.ROOM_SELECTION);
-    
+
     // 重置游戏状态
     setCurrentRound(1);
     setRoundEvent(null);
@@ -926,7 +963,7 @@ export function GameProvider({ children }: GameProviderProps) {
     setWaitingForPlayers(false);
     setGameBackground(null);
     setRoleDefinitions(null);
-    
+
     addMessage("已退出房间，返回房间选择页面");
   };
 
@@ -940,7 +977,7 @@ export function GameProvider({ children }: GameProviderProps) {
       console.log(`发起房间列表请求: ${API_BASE}/rooms`);
       const response = await fetch(`${API_BASE}/rooms`);
       console.log(`房间列表响应状态: ${response.status}`);
-      
+
       if (response.ok) {
         const data: RoomListResponse = await response.json();
         console.log("房间列表响应数据:", data);
@@ -954,7 +991,8 @@ export function GameProvider({ children }: GameProviderProps) {
         setRoomList([]);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       console.error("获取房间列表错误:", error);
       addMessage(`获取房间列表错误: ${errorMessage}`, "error");
       setRoomList([]);
@@ -984,40 +1022,16 @@ export function GameProvider({ children }: GameProviderProps) {
     addMessage("🔄 游戏已重新开始，回到等待室");
   };
 
-  // ==================== 前端阶段倒计时（统一在Context管理） ====================
-  useEffect(() => {
-    let timer: number;
-    if (gameState === GAME_STATES.PLAYING && currentPhase === UI_GAME_PHASES.SELECTION && selectionTimeLeft > 0) {
-      timer = window.setTimeout(() => {
-        setSelectionTimeLeft((prev) => prev - 1);
-      }, 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [gameState, currentPhase, selectionTimeLeft]);
-
-  useEffect(() => {
-    let timer: number;
-    if (gameState === GAME_STATES.PLAYING && currentPhase === UI_GAME_PHASES.DISCUSSION && discussionTimeLeft > 0) {
-      timer = window.setTimeout(() => {
-        setDiscussionTimeLeft((prev) => {
-          if (prev <= 1) {
-            // 由后端广播 selection 阶段，因此不在前端强制切换
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [gameState, currentPhase, discussionTimeLeft]);
-
-  // 阶段切换改由后端驱动（round_phase），前端不再本地计时自动切换
+  // ==================== 倒计时与阶段切换改由后端驱动（round_tick/round_phase） ====================
+  // 不再在前端本地递减 timeLeft，避免与服务端心跳不一致。
 
   // 供组件调用的前端阶段/交互方法
   const goToSelection = (): void => setCurrentPhase(UI_GAME_PHASES.SELECTION);
-  const goToInfoAndOptions = (): void => setCurrentPhase(UI_GAME_PHASES.INFO_AND_OPTIONS);
+  const goToInfoAndOptions = (): void =>
+    setCurrentPhase(UI_GAME_PHASES.INFO_AND_OPTIONS);
   const goToDiscussion = (): void => setCurrentPhase(UI_GAME_PHASES.DISCUSSION);
-  const selectAction = (actionKey: string): void => setSelectedAction(actionKey);
+  const selectAction = (actionKey: string): void =>
+    setSelectedAction(actionKey);
   const submitSelectedAction = (): void => {
     if (!selectedAction) return;
     const action: PlayerAction = {
@@ -1032,7 +1046,7 @@ export function GameProvider({ children }: GameProviderProps) {
   };
 
   // ==================== Context值对象 ====================
-  
+
   /**
    * 提供给子组件的Context值
    * 包含所有游戏状态和处理方法
@@ -1061,8 +1075,7 @@ export function GameProvider({ children }: GameProviderProps) {
 
     // ========== 前端阶段与交互状态 ==========
     currentPhase,
-    discussionTimeLeft,
-    selectionTimeLeft,
+    timeLeft,
     selectedAction,
     hasSubmitted,
     showPrivateModal,

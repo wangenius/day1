@@ -80,10 +80,8 @@ export interface GameContextType {
   // ========== 前端阶段与交互状态（从 GamePlay 提升） ==========
   /** 当前前端阶段：event_display | info_and_options | discussion | selection */
   currentPhase: string;
-  /** 讨论阶段剩余秒数 */
-  discussionTimeLeft: number;
-  /** 选择阶段剩余秒数 */
-  selectionTimeLeft: number;
+  /** 当前阶段剩余秒数 */
+  timeLeft: number;
   /** 当前已选择的选项键（如 A/B/C） */
   selectedAction: string;
   /** 本地是否已提交（与服务端 playerActions 同步） */

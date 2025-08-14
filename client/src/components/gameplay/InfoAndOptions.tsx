@@ -55,10 +55,10 @@ export const InfoAndOptions = ({
         onShowPrivateModal={onShowPrivateModal}
       />
 
-      {/* 提示文字 */}
+      {/* 提示文字：在本阶段直接提示开始团队讨论 */}
       <div className="text-center mb-6">
         <div className="opacity-60 text-white text-lg font-normal font-['Cactus_Classical_Serif'] uppercase">
-          请在和团队讨论后做出选择
+          请与团队开始讨论，并准备好做出选择
         </div>
       </div>
 
@@ -82,14 +82,14 @@ export const InfoAndOptions = ({
         </div>
       </div>
 
-      {/* 进入讨论按钮 */}
+      {/* 进入选择按钮（直接从本阶段进入选择确认） */}
       <div className="flex flex-col items-center pb-8">
         <div
           className="cursor-pointer flex flex-col items-center gap-2 hover:opacity-80 transition-opacity"
           onClick={onGoToSelection}
         >
           <div className="text-white/70 text-base font-normal font-['Cactus_Classical_Serif']">
-            进入讨论
+            进入选择
           </div>
         </div>
       </div>
