@@ -163,7 +163,9 @@ export const Selection = ({
               <div className="text-white">等待其他玩家...</div>
             ) : (
               <div className="text-white">
-                所有玩家已提交，正在进入下一轮...
+                {currentRound <= 5
+                  ? "等待生成最终结果..."
+                  : "所有玩家已提交，正在进入下一轮..."}
               </div>
             )}
           </div>
