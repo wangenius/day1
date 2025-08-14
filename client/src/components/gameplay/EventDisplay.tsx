@@ -23,7 +23,7 @@ export const EventDisplay = ({
   remaining
 }: EventDisplayProps) => {
   return (
-    <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col p-4">
+    <div className="flex-1 w-full bg-stone-950 overflow-hidden flex flex-col p-4">
       {/* 顶部玩家信息区域 */}
       <div className="flex justify-center pt-4 pb-6">
         <PlayerInfo

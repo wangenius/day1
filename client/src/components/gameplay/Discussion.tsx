@@ -7,7 +7,7 @@ interface DiscussionProps {
  */
 export const Discussion = ({ onGoToSelection }: DiscussionProps) => {
   return (
-    <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col p-4">
+    <div className="flex-1 w-full bg-stone-950 overflow-hidden flex flex-col p-4">
       {/* 标题区域 */}
       <div className="text-center pt-8 pb-6">
         <div className="opacity-60 text-white text-xl font-normal font-['Cactus_Classical_Serif'] uppercase leading-normal">

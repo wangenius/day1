@@ -28,7 +28,7 @@ export const InfoAndOptions = ({
   onGoToSelection,
 }: InfoAndOptionsProps) => {
   return (
-    <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col p-4">
+    <div className="flex-1 w-full bg-stone-950 overflow-hidden flex flex-col p-4">
       {/* 顶部玩家信息和阶段标题 */}
       <div className="flex flex-col items-center pt-4 pb-6">
         <div className="mb-4">
