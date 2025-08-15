@@ -136,6 +136,10 @@ class GameRoom(BaseModel):
 
     def add_player(self, player: Player) -> bool:
         """添加玩家到房间"""
+        # 检查游戏状态，只有在lobby状态才能加入
+        if self.game_state != GameState.LOBBY:
+            raise ValueError("游戏已开始，无法加入房间")
+
         # 检查玩家是否已存在
         existing_player = self.get_player(player.name)
         if existing_player:

@@ -27,9 +27,36 @@ function RoomEntrance() {
     try {
       await handleRoomAction("join", roomId);
       setShowRoomList(false);
+    } catch (error) {
+      // 错误处理已经在 handleRoomAction 中完成
+      console.error("快速加入房间失败:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * 检查房间是否可以加入
+   * @param room - 房间信息
+   * @returns 是否可以加入
+   */
+  const canJoinRoom = (room: any): boolean => {
+    return room.game_state === 'lobby' && room.player_count < room.max_players;
+  };
+
+  /**
+   * 获取房间状态描述
+   * @param room - 房间信息
+   * @returns 状态描述
+   */
+  const getRoomStatusText = (room: any): string => {
+    if (room.game_state !== 'lobby') {
+      return '游戏中';
+    }
+    if (room.player_count >= room.max_players) {
+      return '已满员';
+    }
+    return '可加入';
   };
 
   /**
@@ -82,6 +109,9 @@ function RoomEntrance() {
     setLoading(true);
     try {
       await handleRoomAction("join", code);
+    } catch (error) {
+      // 错误处理已经在 handleRoomAction 中完成
+      console.error("加入房间失败:", error);
     } finally {
       setLoading(false);
     }
@@ -202,7 +232,7 @@ function RoomEntrance() {
                             </span>
                           </div>
                           <div className="text-white/70 text-sm mb-2">
-                            状态: {room.game_state === 'lobby' ? '等待中' : '游戏中'}
+                            状态: {getRoomStatusText(room)}
                           </div>
                           {room.players.length > 0 && (
                             <div className="text-white/60 text-sm">
@@ -212,10 +242,10 @@ function RoomEntrance() {
                         </div>
                         <button
                           onClick={() => handleQuickJoin(room.room_id)}
-                          disabled={loading || room.player_count >= room.max_players}
+                          disabled={loading || !canJoinRoom(room)}
                           className="ml-4 px-4 py-2 bg-white/10 hover:bg-white/20 disabled:bg-white/5 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
                         >
-                          {loading ? "进入中..." : room.player_count >= room.max_players ? "已满" : "加入"}
+                          {loading ? "进入中..." : !canJoinRoom(room) ? getRoomStatusText(room) : "加入"}
                         </button>
                       </div>
                     </div>
