@@ -9,7 +9,8 @@ from logger_config import logger
 # 加载.env文件
 load_dotenv()
 from openai.types.chat import ChatCompletionMessageParam
-model = "moonshotai/kimi-k2-instruct"
+
+model = "zai-org/glm-4.5"
 
 
 class LLM:
@@ -23,9 +24,9 @@ class LLM:
     ):
         # 从环境变量获取api_key和base_url
         if api_key is None:
-            api_key = os.getenv('PPIO_API_KEY')
+            api_key = os.getenv("PPIO_API_KEY")
         if base_url is None:
-            base_url = os.getenv('PPIO_BASE_URL')
+            base_url = os.getenv("PPIO_BASE_URL")
         self.client = openai.OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
 
@@ -55,6 +56,8 @@ class LLM:
 
         messages.append({"role": "user", "content": prompt})
 
+        logger.info(f"prompt length: {len(prompt)}")
+
         logger.info(f"发送给OpenAI的消息: {messages}")
 
         try:
@@ -63,6 +66,7 @@ class LLM:
                 messages=messages,
                 temperature=temperature,
             )
+            logger.info(f"response: {response}")
             logger.info(f"生成的结果:{response.choices[0].message.content}")
             return response.choices[0].message.content or ""
         except Exception as e:
@@ -114,10 +118,10 @@ class LLM:
                 content = content[3:]
             if content.endswith("```"):
                 content = content[:-3]
-            
+
             # 清理可能的空白字符
             content = content.strip()
-            
+
             # 尝试修复常见的JSON格式错误
             content = self._fix_common_json_errors(content)
 
@@ -128,20 +132,20 @@ class LLM:
             raise Exception(f"返回的内容不是有效的JSON格式: {str(e)}")
         except Exception as e:
             raise Exception(f"调用OpenAI API失败: {str(e)}")
-    
+
     def _fix_common_json_errors(self, content: str) -> str:
         """修复常见的JSON格式错误"""
         import re
-        
+
         # 移除多余的逗号（如 },, 或 ],）
-        content = re.sub(r',\s*([}\]])', r'\1', content)
-        
+        content = re.sub(r",\s*([}\]])", r"\1", content)
+
         # 修复缺失的引号（简单情况）
-        content = re.sub(r'([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', content)
-        
+        content = re.sub(r"([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:", r'\1"\2":', content)
+
         # 移除末尾多余的逗号
-        content = re.sub(r',\s*$', '', content)
-        
+        content = re.sub(r",\s*$", "", content)
+
         return content
 
     def chat(

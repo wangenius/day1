@@ -159,11 +159,11 @@ export const Selection = ({
             <div className="text-green-400 text-xl font-bold mb-2">
               ✅ 已提交选择
             </div>
-            {waitingForPlayers ? (
+            {waitingForPlayers && currentRound < 5 ? (
               <div className="text-white">等待其他玩家...</div>
             ) : (
               <div className="text-white">
-                {currentRound <= 5
+                {currentRound >= 5
                   ? "等待生成最终结果..."
                   : "所有玩家已提交，正在进入下一轮..."}
               </div>
