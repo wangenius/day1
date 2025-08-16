@@ -148,7 +148,7 @@ export class Room {
       is_host: false,
       actions: [],
     };
-    room.add_player(player);
+    room.add_player();
     return room;
   }
 

@@ -25,9 +25,9 @@ export class Player {
   }
 
   /**
-   * 处理新的 WebSocket 连接
+   * 用户链接
    */
-  static async handle_connection(ws: WebSocket) {
+  static async connect(ws: WebSocket) {
     // 等待首条连接信息
     const init = await new Promise<string>((resolve, reject) => {
       const onMessage = (data: WebSocket.RawData) => {
@@ -38,9 +38,7 @@ export class Player {
       ws.once("close", () => reject(new Error("closed")));
       ws.once("error", (e: Error) => reject(e));
     });
-    const connect_data = JSON.parse(init || "{}");
-    const player_name = connect_data?.player_name;
-    const room_id = connect_data?.room_id;
+    const { player_name, room_id } = JSON.parse(init || "{}");
     if (!player_name || !room_id) {
       ws.close(4000, "缺少玩家名称或房间ID");
       return;

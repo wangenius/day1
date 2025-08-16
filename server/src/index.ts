@@ -92,8 +92,9 @@ const server = createServer(app);
 
 const wss = new WebSocketServer({ server, path: "/ws" });
 
+// 前端连接处理
 wss.on("connection", (ws) => {
-  Player.handle_connection(ws);
+  Player.connect(ws);
 });
 
 const PORT = Number(process.env.PORT) || 8000;
