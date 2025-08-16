@@ -94,7 +94,7 @@ function IdeaPickerInRoom() {
                   {/* 连接状态指示器 */}
                   <div
                     className={`w-2 h-2 rounded-full ${
-                      player.online ? "bg-green-400" : "bg-red-400"
+                      player.is_online ? "bg-green-400" : "bg-red-400"
                     }`}
                   />
                 </div>

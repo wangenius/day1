@@ -142,20 +142,6 @@ interface UseGameHandlersParams {
    */
   setLoadingRoomList: (loading: boolean) => void;
 
-  // ========== 工具函数 ==========
-
-  /**
-   * 保存游戏状态到本地存储的函数
-   * @param playerName - 玩家名称（可选）
-   * @param roomId - 房间ID（可选）
-   * @param gameState - 游戏状态（可选）
-   */
-  saveGameState: (
-    playerName?: string | null,
-    roomId?: string | null,
-    gameState?: GameState | null
-  ) => void;
-
   /** 重置游戏状态到初始值的函数 */
   resetGameState: () => void;
 
@@ -335,7 +321,6 @@ export function useGameHandlers(
     setRoleDefinitions,
     setRoomList,
     setLoadingRoomList,
-    saveGameState,
     resetGameState,
     handleRoomAction,
     connectWebSocket,
@@ -357,9 +342,8 @@ export function useGameHandlers(
     (name: string): void => {
       setPlayerName(name);
       setGameState(GAME_UX_PAGEING.ROOM_SELECTION);
-      saveGameState(name, null, GAME_UX_PAGEING.ROOM_SELECTION);
     },
-    [setPlayerName, setGameState, saveGameState]
+    [setPlayerName, setGameState]
   );
 
   /**
@@ -501,8 +485,7 @@ export function useGameHandlers(
    */
   const handleStartRound = useCallback((): void => {
     setGameState(GAME_UX_PAGEING.PLAYING);
-    saveGameState(playerName, currentRoom, GAME_UX_PAGEING.PLAYING);
-  }, [setGameState, saveGameState, playerName, currentRoom]);
+  }, [setGameState]);
 
   /**
    * 处理加载完成后开始游戏
@@ -510,8 +493,7 @@ export function useGameHandlers(
    */
   const handleLoadingComplete = useCallback((): void => {
     setGameState(GAME_UX_PAGEING.PLAYING);
-    saveGameState(playerName, currentRoom, GAME_UX_PAGEING.PLAYING);
-  }, [setGameState, saveGameState, playerName, currentRoom]);
+  }, [setGameState]);
 
   /**
    * 处理重新开始游戏
@@ -598,7 +580,6 @@ export function useGameHandlers(
     setRoleDefinitions,
     setRoomList,
     setLoadingRoomList,
-    saveGameState,
   ]);
 
   // ==================== 前端阶段控制方法 ====================

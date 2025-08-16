@@ -57,7 +57,7 @@ export interface Player {
   /** 玩家名称 */
   name: string;
   /** 是否在线 */
-  online?: boolean;
+  is_online?: boolean;
   /** 是否为房主 */
   is_host?: boolean;
 }
@@ -143,11 +143,7 @@ export interface RoomStatus {
  */
 export interface RoomInfo {
   /** 房间ID */
-  room_id: string;
-  /** 当前玩家数 */
-  player_count: number;
-  /** 最大玩家数 */
-  max_players: number;
+  id: string;
   /** 房间状态 */
   state: "prepare" | "playing";
   /** 玩家列表 */

@@ -46,7 +46,7 @@ function RoomEntrance() {
    * @returns 是否可以加入
    */
   const canJoinRoom = (room: RoomInfo): boolean => {
-    return room.state === "prepare" && room.player_count < 4;
+    return room.state === "prepare" && room.players.length < 4;
   };
 
   /**
@@ -246,17 +246,17 @@ function RoomEntrance() {
                 <div className="space-y-3">
                   {roomList.map((room) => (
                     <div
-                      key={room.room_id}
+                      key={room.id}
                       className="bg-stone-800 rounded-lg p-4 border border-white/10 hover:border-white/20 transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="text-white text-lg font-medium font-['Cactus_Classical_Serif']">
-                              {room.room_id}
+                              {room.id}
                             </h3>
                             <span className="text-white/60 text-sm">
-                              ({room.players.length}/{room.max_players})
+                              ({room.players.length}/4)
                             </span>
                           </div>
                           <div className="text-white/70 text-sm mb-2">
@@ -269,7 +269,7 @@ function RoomEntrance() {
                           )}
                         </div>
                         <button
-                          onClick={() => handleQuickJoin(room.room_id)}
+                          onClick={() => handleQuickJoin(room.id)}
                           disabled={loading || !canJoinRoom(room)}
                           className="ml-4 px-4 py-2 bg-white/10 hover:bg-white/20 disabled:bg-white/5 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
                         >

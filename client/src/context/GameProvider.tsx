@@ -69,8 +69,6 @@ export function GameProvider({ children }: GameProviderProps) {
     setGameResult: gameState.setGameResult,
     setGameBackground: gameState.setGameBackground,
     setRoleDefinitions: gameState.setRoleDefinitions,
-    normalizePlayersPayload: gameState.normalizePlayersPayload,
-    saveGameState: gameState.saveGameState,
     resetGameState: gameState.resetGameState,
   });
 
@@ -80,7 +78,6 @@ export function GameProvider({ children }: GameProviderProps) {
     playerName: gameState.playerName,
     setRoomList: gameState.setRoomList,
     setLoadingRoomList: gameState.setLoadingRoomList,
-    normalizeRoomsPayload: gameState.normalizeRoomsPayload,
   });
 
   // 事件处理器
@@ -112,7 +109,6 @@ export function GameProvider({ children }: GameProviderProps) {
     setRoleDefinitions: gameState.setRoleDefinitions,
     setRoomList: gameState.setRoomList,
     setLoadingRoomList: gameState.setLoadingRoomList,
-    saveGameState: gameState.saveGameState,
     resetGameState: gameState.resetGameState,
     handleRoomAction: gameAPI.handleRoomAction,
     connectWebSocket: webSocket.connectWebSocket,

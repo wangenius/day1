@@ -22,14 +22,6 @@ interface UseGameAPIParams {
    * @param loading - 是否正在加载房间列表
    */
   setLoadingRoomList: (loading: boolean) => void;
-
-  // ========== 工具函数 ==========
-  /**
-   * 规范化服务器返回的房间数据格式的函数
-   * @param rooms - 服务器返回的原始房间数据
-   * @returns 规范化后的房间信息数组
-   */
-  normalizeRoomsPayload: (rooms: any[]) => RoomInfo[];
 }
 
 /**
@@ -74,13 +66,7 @@ interface UseGameAPIReturn {
  * ```
  */
 export function useGameAPI(params: UseGameAPIParams): UseGameAPIReturn {
-  const {
-    httpBaseUrl,
-    playerName,
-    setRoomList,
-    setLoadingRoomList,
-    normalizeRoomsPayload,
-  } = params;
+  const { httpBaseUrl, playerName, setRoomList, setLoadingRoomList } = params;
 
   /**
    * 获取房间列表
@@ -119,21 +105,14 @@ export function useGameAPI(params: UseGameAPIParams): UseGameAPIReturn {
         const data: { rooms: RoomInfo[] } = await response.json();
         console.log("📋 步骤5: 成功解析响应数据:", data);
 
-        // 步骤6: 规范化房间数据格式
-        console.log("📋 步骤6: 开始规范化房间数据格式");
-        const normalizedRooms = normalizeRoomsPayload(data.rooms);
-        console.log(
-          `📋 步骤6: 规范化完成，共 ${normalizedRooms.length} 个房间`
-        );
-
         // 步骤7: 更新房间列表状态
         console.log("📋 步骤7: 更新房间列表状态");
-        setRoomList(normalizedRooms);
+        setRoomList(data.rooms);
 
         // 步骤8: 显示成功消息给用户
         console.log("📋 步骤8: 显示成功消息");
         console.log(
-          `📋 完成: 房间列表更新完成，共 ${normalizedRooms.length} 个房间`
+          `📋 完成: 房间列表更新完成，共 ${data.rooms.length} 个房间`
         );
       } else {
         // 步骤4.1: 处理HTTP错误响应
@@ -163,7 +142,7 @@ export function useGameAPI(params: UseGameAPIParams): UseGameAPIReturn {
       console.log("📋 最终步骤: 重置加载状态为false");
       setLoadingRoomList(false);
     }
-  }, [httpBaseUrl, setLoadingRoomList, normalizeRoomsPayload, setRoomList]);
+  }, [httpBaseUrl, setLoadingRoomList, setRoomList]);
 
   /**
    * 处理房间操作（创建或加入房间）

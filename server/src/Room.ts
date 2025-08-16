@@ -64,9 +64,7 @@ export class Room {
       const base: any = {
         name: p.name,
         is_online: p.is_online,
-        isHost: p.is_host,
-        startup_idea: this.game.gameInfo.ideas[p.name],
-        role: this.game.gameInfo.roles[p.name],
+        is_host: p.is_host,
       };
       return base;
     });

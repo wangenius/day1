@@ -111,28 +111,6 @@ interface UseGameStateReturn {
   /** 设置是否显示事件详情弹窗 */
   setShowEventModal: (show: boolean) => void;
 
-  // ========== 工具函数 ==========
-  /**
-   * 规范化服务器返回的玩家数据格式
-   * @param arr - 服务器返回的原始玩家数据数组
-   * @returns 规范化后的Player数组
-   */
-  normalizePlayersPayload: (arr: any[]) => Player[];
-  /**
-   * 规范化服务器返回的房间数据格式
-   * @param rooms - 服务器返回的原始房间数据数组
-   * @returns 规范化后的RoomInfo数组
-   */
-  normalizeRoomsPayload: (rooms: any[]) => RoomInfo[];
-  /**
-   * 保存游戏状态到本地存储
-   * @param playerName - 玩家名称（可选）
-   * @param roomId - 房间ID（可选）
-   * @param gameState - 游戏状态（可选）
-   */
-  saveGameState: (
-    playerName?: string | null,
-  ) => void;
   /** 重置所有游戏相关状态到初始值 */
   resetGameState: () => void;
 }
@@ -241,86 +219,6 @@ export function useGameState(): UseGameStateReturn {
   /** 事件详情弹窗 */
   const [showEventModal, setShowEventModal] = useState<boolean>(false);
 
-  // ==================== 工具函数 ====================
-
-  /**
-   * 将服务端玩家payload规范化为前端 Player 类型
-   */
-  const normalizePlayersPayload = useCallback((arr: any[]): Player[] => {
-    console.log(`🔄 步骤开始: 规范化玩家数据`);
-    console.log(`🔄 步骤开始: 输入数据:`, arr);
-
-    // 步骤1: 验证输入数据类型
-    if (!Array.isArray(arr)) {
-      console.log(`🔄 步骤1: 输入不是数组，返回空数组`);
-      return [];
-    }
-    console.log(`🔄 步骤1: 输入验证通过，数组长度: ${arr.length}`);
-
-    // 步骤2: 逐个转换玩家数据
-    console.log(`🔄 步骤2: 开始转换玩家数据`);
-    const normalizedPlayers = arr.map((p, index) => {
-      console.log(`🔄 步骤2.${index + 1}: 转换玩家数据:`, p);
-
-      const player = {
-        name: p?.name ?? "",
-        online: p?.is_online ?? p?.online ?? false,
-        role: p?.role ?? undefined,
-        idea: p?.startup_idea ?? p?.idea ?? undefined,
-        isHost: p?.isHost ?? p?.is_host ?? false,
-      };
-
-      console.log(`🔄 步骤2.${index + 1}: 转换完成:`, player);
-      return player;
-    });
-
-    console.log(
-      `🔄 完成: 玩家数据规范化完成，共 ${normalizedPlayers.length} 个玩家`
-    );
-    return normalizedPlayers;
-  }, []);
-
-  /**
-   * 将服务端房间列表规范化为前端 RoomInfo 类型
-   */
-  const normalizeRoomsPayload = useCallback((rooms: any[]): RoomInfo[] => {
-    if (!Array.isArray(rooms)) return [] as RoomInfo[];
-    return rooms.map((r) => ({
-      room_id: r?.room_id ?? r?.id ?? "",
-      player_count: r?.player_count ?? 0,
-      max_players: r?.max_players ?? 4,
-      state: r?.state ?? r?.room_state ?? "lobby",
-      created_at: r?.created_at ?? null,
-      players: Array.isArray(r?.players)
-        ? r.players.map((p: any) => ({
-            name: p?.name ?? "",
-            is_host: p?.is_host ?? p?.isHost ?? false,
-          }))
-        : [],
-    }));
-  }, []);
-
-  /**
-   * 保存游戏状态到本地存储
-   * @param savedPlayerName - 玩家名称
-   * @param roomId - 房间ID
-   * @param savedGameState - 游戏状态
-   */
-  const saveGameState = useCallback(
-    (
-      savedPlayerName?: string | null,
-      roomId?: string | null,
-      savedGameState?: GameState | null
-    ): void => {
-      if (savedPlayerName)
-        localStorage.setItem("startup_player_name", savedPlayerName);
-      if (roomId) localStorage.setItem("startup_room_id", roomId);
-      if (savedGameState)
-        localStorage.setItem("startup_game_state", savedGameState);
-    },
-    []
-  );
-
   /**
    * 重置游戏状态
    * 将所有游戏相关状态重置为初始值
@@ -338,8 +236,7 @@ export function useGameState(): UseGameStateReturn {
     setRoleDefinitions(null);
     setRoomList([]);
     setLoadingRoomList(false);
-    saveGameState(playerName, currentRoom, GAME_UX_PAGEING.ROOM_LOBBY);
-  }, [playerName, currentRoom, saveGameState]);
+  }, [playerName, currentRoom]);
 
   return {
     // ========== 基础状态 ==========
@@ -393,11 +290,6 @@ export function useGameState(): UseGameStateReturn {
     setHasSubmitted,
     setShowPrivateModal,
     setShowEventModal,
-
-    // ========== 工具函数 ==========
-    normalizePlayersPayload,
-    normalizeRoomsPayload,
-    saveGameState,
     resetGameState,
   };
 }

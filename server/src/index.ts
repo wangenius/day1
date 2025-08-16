@@ -98,8 +98,7 @@ app.get("/rooms", (_req, res) => {
     for (const [id, room] of Object.entries(all)) {
       list.push({
         id,
-        player_count: Object.keys(room.players).length,
-        room_state: room.state,
+        state: room.state,
         players: room.getPlayersPayload(),
       });
     }

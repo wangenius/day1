@@ -78,25 +78,6 @@ interface UseWebSocketParams {
   setGameBackground: (background: string | null) => void;
   /** 设置角色定义数据的函数 */
   setRoleDefinitions: (roles: Record<string, RoleDefinition> | null) => void;
-
-  // ========== 工具函数 ==========
-  /**
-   * 规范化服务器玩家数据格式的函数
-   * @param arr - 服务器返回的原始玩家数据
-   * @returns 规范化后的Player数组
-   */
-  normalizePlayersPayload: (arr: any[]) => Player[];
-  /**
-   * 保存游戏状态到本地存储的函数
-   * @param playerName - 玩家名称（可选）
-   * @param roomId - 房间ID（可选）
-   * @param gameState - 游戏状态（可选）
-   */
-  saveGameState: (
-    playerName?: string | null,
-    roomId?: string | null,
-    gameState?: GameState | null
-  ) => void;
   /** 重置游戏状态的函数 */
   resetGameState: () => void;
 }
@@ -214,8 +195,6 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
     setGameResult,
     setGameBackground,
     setRoleDefinitions,
-    normalizePlayersPayload,
-    saveGameState,
     resetGameState,
   } = params;
 
@@ -232,7 +211,7 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
       switch (message.type) {
         // 玩家加入房间
         case "player_join": {
-          setPlayers(normalizePlayersPayload(message.data.players as any[]));
+          setPlayers(message.data.players);
           // 只有当加入的不是当前玩家时才显示消息
           if (message.data.player_name !== playerName) {
           }
@@ -241,25 +220,22 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
         // 玩家离开房间
         case "player_leave":
           console.log(message);
-          
-          setPlayers(normalizePlayersPayload(message.data.players as any[]));
+
+          setPlayers(message.data.players);
           break;
         // 所有创业想法提交完成
         case "ideas_complete":
-          setPlayers(normalizePlayersPayload(message.data.players as any[]));
+          setPlayers(message.data.players);
           setGameState(GAME_UX_PAGEING.ROLE_SELECTION);
-          saveGameState(playerName, null, GAME_UX_PAGEING.ROLE_SELECTION);
           break;
         // 游戏加载中
         case "game_loading":
           setGameState(GAME_UX_PAGEING.LOADING);
-          saveGameState(playerName, null, GAME_UX_PAGEING.LOADING);
           break;
         // 游戏开始，进入角色选择
         case "game_start": {
           console.log("GameContext - 收到game_start消息:", message);
           setGameState(GAME_UX_PAGEING.ROLE_SELECTION);
-          saveGameState(playerName, null, GAME_UX_PAGEING.ROLE_SELECTION);
           // 设置游戏背景故事
           if (message.data && message.data.background) {
             console.log("GameContext - 设置背景故事:", message.data.background);
@@ -280,7 +256,6 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
         case "transition_animation":
           console.log("GameContext - 收到transition_animation消息:", message);
           setGameState(GAME_UX_PAGEING.EVENT_GENERATION);
-          saveGameState(playerName, null, GAME_UX_PAGEING.EVENT_GENERATION);
           if (message.data && message.data.background) {
             console.log("GameContext - 设置背景故事:", message.data.background);
             setGameBackground(message.data.background as string);
@@ -298,7 +273,7 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
         case "role_selected":
           console.log("GameContext - 收到role_selected消息:", message);
           setSelectedRoles(message.data.selectedRoles as string[]);
-          setPlayers(normalizePlayersPayload(message.data.players as any[]));
+          setPlayers(message.data.players);
           break;
         // 所有角色选择完成
         case "roles_complete":
@@ -325,13 +300,11 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
               message.data.privateMessages as Record<string, string>
             );
           }
-          saveGameState(playerName, null, GAME_UX_PAGEING.PLAYING);
           break;
         // 轮次加载中
         case "round_loading":
           setGameState(GAME_UX_PAGEING.ROUND_LOADING);
           setCurrentRound(message.data.round as number);
-          saveGameState(playerName, null, GAME_UX_PAGEING.ROUND_LOADING);
           break;
         // 新轮次开始
         case "round_start":
@@ -372,7 +345,6 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
           // 若为第5轮且所有玩家已提交，但尚未收到服务器的 game_loading，先本地进入结算加载
           if (!message.data.waitingForPlayers && currentRound >= 5) {
             setGameState(GAME_UX_PAGEING.LOADING);
-            saveGameState(playerName, null, GAME_UX_PAGEING.LOADING);
           }
           break;
         // 后端主导的UI阶段
@@ -425,8 +397,7 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
             setHasSubmitted(Boolean(hasMe));
           } catch {}
           // 玩家列表（用于头像/房主标记）
-          if (Array.isArray(d.players))
-            setPlayers(normalizePlayersPayload(d.players as any[]));
+          if (Array.isArray(d.players)) setPlayers(d.players);
           break;
         }
         // 轮次结束
@@ -436,12 +407,11 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
         case "game_complete":
           setGameState(GAME_UX_PAGEING.RESULT);
           setGameResult(message.data.result as GameResult);
-          saveGameState(playerName, null, GAME_UX_PAGEING.RESULT);
           break;
         // 游戏重新开始
         case "game_restart":
           resetGameState();
-          setPlayers(normalizePlayersPayload(message.data.players as any[]));
+          setPlayers(message.data.players);
           break;
         // 角色选择错误
         case "role_selection_error":
@@ -457,9 +427,7 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
       currentPhase,
       UI_GAME_PHASES,
       setPlayers,
-      normalizePlayersPayload,
       setGameState,
-      saveGameState,
       setGameBackground,
       setRoleDefinitions,
       setSelectedRoles,
@@ -564,7 +532,7 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
             dynamic_roles: roles, // 动态角色定义
           } = message.data;
 
-          setPlayers(normalizePlayersPayload((playersData as any[]) || []));
+          setPlayers(playersData);
 
           // 处理重新连接的情况
           if (is_reconnect) {
@@ -607,22 +575,9 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
               default:
                 setGameState(GAME_UX_PAGEING.ROOM_LOBBY);
             }
-
-            // 映射服务器状态到客户端状态并保存
-            const stateMapping: Record<string, GameState> = {
-              lobby: GAME_UX_PAGEING.ROOM_LOBBY,
-              role_selection: GAME_UX_PAGEING.ROLE_SELECTION,
-              loading: GAME_UX_PAGEING.LOADING,
-              playing: GAME_UX_PAGEING.PLAYING,
-              finished: GAME_UX_PAGEING.RESULT,
-            };
-            const currentGameState =
-              stateMapping[game_state as string] || GAME_UX_PAGEING.ROOM_LOBBY;
-            saveGameState(player, roomId, currentGameState);
           } else {
             // 新连接，进入大厅状态
             setGameState(GAME_UX_PAGEING.ROOM_LOBBY);
-            saveGameState(player, roomId, GAME_UX_PAGEING.ROOM_LOBBY);
           }
         } else {
           // 处理其他类型的消息
@@ -661,9 +616,7 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
       setWsConnected,
       setCurrentRoom,
       setPlayers,
-      normalizePlayersPayload,
       setGameState,
-      saveGameState,
       setSelectedRoles,
       setGameBackground,
       setRoleDefinitions,
