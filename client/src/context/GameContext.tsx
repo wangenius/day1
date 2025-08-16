@@ -791,7 +791,7 @@ export function GameProvider({ children }: GameProviderProps) {
     roomId: string
   ): Promise<void> => {
     try {
-      const apiUrl = `${API_BASE}/rooms/create`;
+      const apiUrl = `${API_BASE}/rooms/join`;
       addMessage(`正在进入房间: ${roomId}`);
 
       const requestBody = {
