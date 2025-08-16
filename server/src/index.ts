@@ -43,7 +43,7 @@ app.post("/rooms/reconnect", (req, res) => {
   const { player_name } = req.body;
   const room = Room.get_by_player(player_name);
   if (!room) return res.json({ room_id: null, success: false });
-  logger.info(`房间 ${room.id} 状态: ${room.state}`);
+  logger.info(`重连成功，房间 ${room.id} 状态: ${room.state}`);
   return res.json({ room_id: room.id, success: true });
 });
 

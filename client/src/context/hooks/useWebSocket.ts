@@ -6,7 +6,6 @@ import {
   type Player,
   type PlayerAction,
   type RoleDefinition,
-  type RoomStatus,
   type RoundEvent,
   type WebSocketMessage,
 } from "../../const/const";
@@ -640,10 +639,16 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
         // 检查房间状态
         const response = await fetch(`${httpBaseUrl}/rooms/reconnect`, {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ player_name: player }),
         });
         if (response.ok) {
-          const { room_id } = (await response.json()) as RoomStatus;
+          const data = await response.json();
+          const { room_id } = data;
+          console.log(data);
+
           if (room_id) {
             connectWebSocket(player, room_id);
           } else {
