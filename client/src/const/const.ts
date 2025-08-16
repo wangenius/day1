@@ -6,17 +6,21 @@ export const GAME_UX_PAGEING = {
   /** 初始状态 */
   INITIAL: "initial",
   /** 欢迎页面 */
-  WELCOME: "welcome",
+  USERNAME: "username",
   /** 房间选择 */
   ROOM_SELECTION: "room_selection",
-  /** 大厅 */
-  LOBBY: "lobby",
+  /** 房间大厅 */
+  ROOM_LOBBY: "room_lobby",
+
+  /** ----------  下面是游戏中的状态 ---------- */
+  /** 输入创业想法 */
+  IDEA_INPUT: "idea_input",
+  /** 角色选择 */
+  ROLE_SELECTION: "role_selection",
   /** 加载 */
   LOADING: "loading",
   /** 回合加载 */
   ROUND_LOADING: "round_loading",
-  /** 角色选择 */
-  ROLE_SELECTION: "role_selection",
   /** 事件生成 */
   EVENT_GENERATION: "event_generation",
   /** 游戏进行中 */
@@ -149,6 +153,3 @@ export interface RoomInfo {
   /** 玩家列表 */
   players: Player[];
 }
-
-
-

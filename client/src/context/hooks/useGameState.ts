@@ -132,8 +132,6 @@ interface UseGameStateReturn {
    */
   saveGameState: (
     playerName?: string | null,
-    roomId?: string | null,
-    gameState?: GameState | null
   ) => void;
   /** 重置所有游戏相关状态到初始值 */
   resetGameState: () => void;
@@ -328,7 +326,7 @@ export function useGameState(): UseGameStateReturn {
    * 将所有游戏相关状态重置为初始值
    */
   const resetGameState = useCallback((): void => {
-    setGameState(GAME_UX_PAGEING.LOBBY);
+    setGameState(GAME_UX_PAGEING.ROOM_LOBBY);
     setCurrentRound(1);
     setRoundEvent(null);
     setPrivateMessages({});
@@ -340,7 +338,7 @@ export function useGameState(): UseGameStateReturn {
     setRoleDefinitions(null);
     setRoomList([]);
     setLoadingRoomList(false);
-    saveGameState(playerName, currentRoom, GAME_UX_PAGEING.LOBBY);
+    saveGameState(playerName, currentRoom, GAME_UX_PAGEING.ROOM_LOBBY);
   }, [playerName, currentRoom, saveGameState]);
 
   return {

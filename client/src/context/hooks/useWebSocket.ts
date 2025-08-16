@@ -240,6 +240,8 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
         }
         // 玩家离开房间
         case "player_leave":
+          console.log(message);
+          
           setPlayers(normalizePlayersPayload(message.data.players as any[]));
           break;
         // 所有创业想法提交完成
@@ -569,7 +571,7 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
             // 根据服务器状态恢复游戏状态
             switch (game_state) {
               case "lobby":
-                setGameState(GAME_UX_PAGEING.LOBBY);
+                setGameState(GAME_UX_PAGEING.ROOM_LOBBY);
                 break;
               case "role_selection":
                 setGameState(GAME_UX_PAGEING.ROLE_SELECTION);
@@ -603,24 +605,24 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
                 if (game_result) setGameResult(game_result as GameResult);
                 break;
               default:
-                setGameState(GAME_UX_PAGEING.LOBBY);
+                setGameState(GAME_UX_PAGEING.ROOM_LOBBY);
             }
 
             // 映射服务器状态到客户端状态并保存
             const stateMapping: Record<string, GameState> = {
-              lobby: GAME_UX_PAGEING.LOBBY,
+              lobby: GAME_UX_PAGEING.ROOM_LOBBY,
               role_selection: GAME_UX_PAGEING.ROLE_SELECTION,
               loading: GAME_UX_PAGEING.LOADING,
               playing: GAME_UX_PAGEING.PLAYING,
               finished: GAME_UX_PAGEING.RESULT,
             };
             const currentGameState =
-              stateMapping[game_state as string] || GAME_UX_PAGEING.LOBBY;
+              stateMapping[game_state as string] || GAME_UX_PAGEING.ROOM_LOBBY;
             saveGameState(player, roomId, currentGameState);
           } else {
             // 新连接，进入大厅状态
-            setGameState(GAME_UX_PAGEING.LOBBY);
-            saveGameState(player, roomId, GAME_UX_PAGEING.LOBBY);
+            setGameState(GAME_UX_PAGEING.ROOM_LOBBY);
+            saveGameState(player, roomId, GAME_UX_PAGEING.ROOM_LOBBY);
           }
         } else {
           // 处理其他类型的消息

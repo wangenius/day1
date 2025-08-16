@@ -4,6 +4,10 @@ import {
   type GameState,
   type Player,
   type PlayerAction,
+  type RoundEvent,
+  type GameResult,
+  type RoleDefinition,
+  type RoomInfo,
 } from "../../const/const";
 
 /**
@@ -22,6 +26,9 @@ interface UseGameHandlersParams {
   wsRef: React.MutableRefObject<WebSocket | null>;
   /** WebSocket 连接状态标志，指示是否已成功连接到服务器 */
   wsConnected: boolean;
+
+  /** HTTP API 服务器的基础URL地址，用于房间状态检查等HTTP请求 */
+  httpBaseUrl: string;
 
   // ========== UI 状态相关 ==========
   /** 当前玩家选择的行动/选项的键值 */
@@ -84,6 +91,56 @@ interface UseGameHandlersParams {
    * @param connected - 是否已连接
    */
   setWsConnected: (connected: boolean) => void;
+  /**
+   * 设置当前轮次的函数
+   * @param round - 新的轮次编号
+   */
+  setCurrentRound: (round: number) => void;
+  /**
+   * 设置当前轮次事件的函数
+   * @param event - 新的轮次事件或null
+   */
+  setRoundEvent: (event: RoundEvent | null) => void;
+  /**
+   * 设置私人消息映射表的函数
+   * @param messages - 新的私人消息映射表
+   */
+  setPrivateMessages: (messages: Record<string, string>) => void;
+  /**
+   * 设置玩家行动列表的函数
+   * @param actions - 新的玩家行动列表
+   */
+  setPlayerActions: (actions: PlayerAction[]) => void;
+  /**
+   * 设置游戏结果的函数
+   * @param result - 新的游戏结果或null
+   */
+  setGameResult: (result: GameResult | null) => void;
+  /**
+   * 设置是否等待其他玩家状态的函数
+   * @param waiting - 是否等待其他玩家
+   */
+  setWaitingForPlayers: (waiting: boolean) => void;
+  /**
+   * 设置游戏背景故事的函数
+   * @param background - 新的游戏背景故事或null
+   */
+  setGameBackground: (background: string | null) => void;
+  /**
+   * 设置角色定义数据的函数
+   * @param roles - 新的角色定义数据或null
+   */
+  setRoleDefinitions: (roles: Record<string, RoleDefinition> | null) => void;
+  /**
+   * 设置房间列表的函数
+   * @param rooms - 新的房间列表
+   */
+  setRoomList: (rooms: RoomInfo[]) => void;
+  /**
+   * 设置房间列表加载状态的函数
+   * @param loading - 是否正在加载房间列表
+   */
+  setLoadingRoomList: (loading: boolean) => void;
 
   // ========== 工具函数 ==========
 
@@ -256,8 +313,8 @@ export function useGameHandlers(
     currentRound,
     wsRef,
     wsConnected,
-
     selectedAction,
+    httpBaseUrl,
     UI_GAME_PHASES,
     setGameState,
     setPlayerName,
@@ -268,6 +325,16 @@ export function useGameHandlers(
     setHasSubmitted,
     setCurrentRoom,
     setWsConnected,
+    setCurrentRound,
+    setRoundEvent,
+    setPrivateMessages,
+    setPlayerActions,
+    setGameResult,
+    setWaitingForPlayers,
+    setGameBackground,
+    setRoleDefinitions,
+    setRoomList,
+    setLoadingRoomList,
     saveGameState,
     resetGameState,
     handleRoomAction,
@@ -279,7 +346,7 @@ export function useGameHandlers(
    * 从初始页面进入欢迎页面
    */
   const handleInitialPageClick = useCallback((): void => {
-    setGameState(GAME_UX_PAGEING.WELCOME);
+    setGameState(GAME_UX_PAGEING.USERNAME);
   }, [setGameState]);
 
   /**
@@ -462,46 +529,56 @@ export function useGameHandlers(
    * 处理退出房间
    * 发送退出消息给后端，关闭WebSocket连接，清除保存状态，返回房间选择页面
    */
-  const handleExitRoom = useCallback((): void => {
+  const handleExitRoom = useCallback(async (): Promise<void> => {
     // 如果有WebSocket连接，先发送退出房间消息
-    if (wsRef.current && wsConnected) {
-      try {
-        wsRef.current.send(
-          JSON.stringify({
-            type: "leave_room",
-            data: {
-              player_name: playerName,
-              room_id: currentRoom,
-            },
-          })
-        );
+    try {
+      const response = await fetch(`${httpBaseUrl}/rooms/exit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          player_name: playerName,
+        }),
+      });
 
-        // 给服务器一点时间处理退出消息，然后关闭连接
-        setTimeout(() => {
-          if (wsRef.current) {
-            wsRef.current.close();
-            wsRef.current = null;
-          }
-        }, 100);
-      } catch (error) {
-        console.warn("发送退出房间消息失败:", error);
-        // 即使发送失败也要关闭连接
+      if (response.ok) {
+        console.log("退出房间成功");
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
+        }
+      } else {
+        console.error("退出房间失败");
+      }
+    } catch (error) {
+      console.warn("发送退出房间消息失败:", error);
+      // 即使发送失败也要关闭连接
+      if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
       }
-    } else if (wsRef.current) {
-      // 如果连接存在但未连接，直接关闭
-      wsRef.current.close();
-      wsRef.current = null;
     }
 
     // 重置相关状态
     setWsConnected(false);
     setCurrentRoom("");
-    setGameState(GAME_UX_PAGEING.ROOM_SELECTION);
 
-    // 重置游戏状态会在resetGameState中处理
-    resetGameState();
+    // 重置游戏状态（但不包括gameState，因为我们要手动设置）
+    setCurrentRound(1);
+    setRoundEvent(null);
+    setPrivateMessages({});
+    setPlayerActions([]);
+    setGameResult(null);
+    setSelectedRoles([]);
+    setWaitingForPlayers(false);
+    setGameBackground(null);
+    setRoleDefinitions(null);
+    setRoomList([]);
+    setLoadingRoomList(false);
+
+    // 切换到房间选择页面
+    setGameState(GAME_UX_PAGEING.ROOM_SELECTION);
   }, [
     wsRef,
     wsConnected,
@@ -510,7 +587,18 @@ export function useGameHandlers(
     setWsConnected,
     setCurrentRoom,
     setGameState,
-    resetGameState,
+    setCurrentRound,
+    setRoundEvent,
+    setPrivateMessages,
+    setPlayerActions,
+    setGameResult,
+    setSelectedRoles,
+    setWaitingForPlayers,
+    setGameBackground,
+    setRoleDefinitions,
+    setRoomList,
+    setLoadingRoomList,
+    saveGameState,
   ]);
 
   // ==================== 前端阶段控制方法 ====================

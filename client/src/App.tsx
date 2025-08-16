@@ -7,9 +7,10 @@ import { InitialPage } from "./components/InitialPage";
 import RoleSelection from "./components/roleSelection/RoleSelection";
 import RoomEntrance from "./components/room/RoomEntrance";
 import RoundLoadingPage from "./components/RoundLoadingPage";
-import UserNamePage from "./components/WelcomePage";
+import UserNamePage from "./components/UsernamePage";
 import { GAME_UX_PAGEING } from "./const/const";
 import { useGame } from "./context/GameContext";
+import { RoomLobby } from "./components/room/RoomLobby";
 
 function App() {
   const { gameState } = useGame();
@@ -18,11 +19,13 @@ function App() {
     switch (gameState) {
       case GAME_UX_PAGEING.INITIAL:
         return <InitialPage />;
-      case GAME_UX_PAGEING.WELCOME:
+      case GAME_UX_PAGEING.USERNAME:
         return <UserNamePage />;
       case GAME_UX_PAGEING.ROOM_SELECTION:
         return <RoomEntrance />;
-      case GAME_UX_PAGEING.LOBBY:
+      case GAME_UX_PAGEING.ROOM_LOBBY:
+        return <RoomLobby />;
+      case GAME_UX_PAGEING.IDEA_INPUT:
         return <IdeaPickerInRoom />;
       case GAME_UX_PAGEING.ROLE_SELECTION:
         return <RoleSelection />;

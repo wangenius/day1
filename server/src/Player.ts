@@ -4,20 +4,6 @@ import { PlayerInfo } from "./types/types.js";
 import { logger } from "./utils/logger.js";
 
 /**
- * WebSocket消息类型枚举
- *
- * 定义了玩家连接相关的消息类型：
- * - CONNECTION_SUCCESS: 连接建立成功，返回完整游戏状态
- * - PLAYER_JOIN: 玩家加入房间通知
- * - PLAYER_LEAVE: 玩家离开房间通知
- */
-enum MessageType {
-  CONNECTION_SUCCESS = "connection_success",
-  PLAYER_JOIN = "player_join",
-  PLAYER_LEAVE = "player_leave",
-}
-
-/**
  * 玩家管理类
  *
  * 职责说明：
@@ -195,6 +181,8 @@ export class Player implements PlayerInfo {
     // payloadPlayers包含所有玩家的基本信息（姓名、在线状态、房主状态等）
     const payloadPlayers = room.getPlayersPayload();
 
+    console.log(payloadPlayers);
+
     // ========== 第七步：记录玩家上线日志 ==========
     // 在服务器日志中记录玩家上线事件，便于调试和监控
     logger.info(`玩家 ${player_name} 上线`);
@@ -204,14 +192,14 @@ export class Player implements PlayerInfo {
       // 情况1：新玩家加入 - 向房间内所有玩家广播
       // 通知所有人有新玩家加入了房间，包括更新后的玩家列表
       await room.broadcast({
-        type: MessageType.PLAYER_JOIN,
+        type: "player_join",
         data: { player_name, players: payloadPlayers },
       });
     } else {
       // 情况2：玩家重连 - 向除了重连玩家外的所有人广播
       // 通知其他玩家该玩家已重新上线，第三个参数排除重连的玩家本身
       await room.broadcast({
-        type: MessageType.PLAYER_JOIN,
+        type: "player_join",
         data: { player_name, players: payloadPlayers },
       });
     }
@@ -228,7 +216,7 @@ export class Player implements PlayerInfo {
     // 准备发送给客户端的完整游戏状态数据
     // 这个数据包含了客户端重建完整游戏界面所需的所有信息
     const connection_data = {
-      type: MessageType.CONNECTION_SUCCESS, // 消息类型：连接成功
+      type: "connection_success", // 消息类型：连接成功
       data: {
         room_id, // 房间ID
         player_name, // 玩家名称
@@ -292,56 +280,6 @@ export class Player implements PlayerInfo {
 
           // 游戏重启路由：重置游戏状态，重新开始（仅房主可操作）
           restart_game: async () => room.game.handle_restart_game(player_name),
-
-          // 主动退出房间路由：处理玩家主动离开房间的完整流程
-          leave_room: async (payload) => {
-            /**
-             * ========== 处理玩家主动退出房间 ==========
-             *
-             * 退出流程：
-             * 1. 查找玩家所在房间
-             * 2. 获取其他在线玩家列表
-             * 3. 完全移除玩家（而非标记离线）
-             * 4. 通知其他玩家该玩家已离开
-             * 5. 检查房间是否为空，空房间自动删除
-             * 6. 关闭WebSocket连接
-             *
-             * 注意：主动退出与断线的区别
-             * - 主动退出：完全移除玩家数据，不支持重连
-             * - 断线：仅标记离线，支持重连恢复
-             */
-
-            // 重新查找玩家所在房间（防止房间状态变化）
-            const room = Room.get_by_player(player_name);
-            if (room) {
-              // 获取除当前玩家外的其他在线玩家列表，用于后续通知
-              const other_online = room
-                .get_online_players()
-                .filter((p) => p.name !== player_name);
-
-              // 完全从房间中移除玩家（非标记离线，而是彻底删除）
-              room.remove_player_completely(player_name);
-
-              // 如果还有其他在线玩家，通知他们该玩家已离开
-              if (other_online.length) {
-                await room.broadcast({
-                  type: MessageType.PLAYER_LEAVE,
-                  data: {
-                    player_name,
-                    players: room.getPlayersPayload(), // 发送更新后的玩家列表
-                  },
-                });
-              }
-
-              // 房间清理：如果房间内没有任何玩家了，删除整个房间
-              if (room.get_online_players().length === 0) {
-                Room.remove(room.id);
-              }
-            }
-
-            // 主动关闭WebSocket连接，结束通信
-            ws.close();
-          },
         };
 
         // ========== 12.3：执行对应的路由处理器 ==========
@@ -387,13 +325,13 @@ export class Player implements PlayerInfo {
         // ========== 13.3：标记玩家为离线（保留数据） ==========
         // 调用remove_player方法仅标记玩家为离线，不删除玩家数据
         // 这样玩家重连时可以恢复完整的游戏状态和进度
-        r.remove_player(player_name);
+        r.offline_player(player_name);
 
         // ========== 13.4：通知其他在线玩家 ==========
         // 如果还有其他在线玩家，通知他们该玩家已离线
         if (other_online.length) {
           await r.broadcast({
-            type: MessageType.PLAYER_LEAVE,
+            type: "player_leave",
             data: {
               player_name,
               players: r.getPlayersPayload(), // 发送更新后的玩家列表（显示离线状态）

@@ -1,6 +1,6 @@
 import { Game } from "./Game.js";
 import { Player } from "./Player.js";
-import { RoomState, RoleEnum, PlayerInfo } from "./types/types.js";
+import { RoomState, RoleEnum, PlayerInfo, GameInfo } from "./types/types.js";
 
 /**
  * 游戏房间管理类
@@ -24,7 +24,7 @@ export class Room {
   id: string;
 
   /** 房间内玩家列表 - 包含在线和离线玩家，最多4人 */
-  players: Player[] = [];
+  players: Map<string, Player> = new Map();
 
   /** 房间创建时间戳 */
   created_at: Date;
@@ -59,25 +59,15 @@ export class Room {
    * @param options.includeIdea 是否包含创业想法信息
    * @returns 格式化的玩家信息数组
    */
-  getPlayersPayload(options?: {
-    includeRole?: boolean;
-    includeIdea?: boolean;
-  }) {
-    return this.players.map((p) => {
+  getPlayersPayload() {
+    return Array.from(this.players.values()).map((p) => {
       const base: any = {
         name: p.name,
         is_online: p.is_online,
         isHost: p.is_host,
+        startup_idea: this.game.gameInfo.ideas[p.name],
+        role: this.game.gameInfo.roles[p.name],
       };
-
-      if (options?.includeRole) {
-        base.role = this.game.gameInfo.roles[p.name];
-      }
-
-      if (options?.includeIdea) {
-        base.startup_idea = this.game.gameInfo.ideas[p.name];
-      }
-
       return base;
     });
   }
@@ -127,9 +117,9 @@ export class Room {
    * @param message 要广播的消息对象
    * @returns 成功发送消息的玩家数量
    */
-  async broadcast(message: any) {
+  async broadcast(message: { type: string; data: any }) {
     let sent = 0;
-    for (const p of this.players) {
+    for (const p of Array.from(this.players.values())) {
       if (!p.is_online) continue;
       const ws = p?.socket;
       if (!ws || ws.readyState !== ws.OPEN) continue;
@@ -166,8 +156,8 @@ export class Room {
     }
     if (this.get_online_players().length >= 4)
       throw new Error("房间已满，最多4人");
-    if (this.players.length === 0) player.is_host = true;
-    this.players.push(player);
+    if (this.players.size === 0) player.is_host = true;
+    this.players.set(player.name, player);
     return true;
   }
 
@@ -176,7 +166,7 @@ export class Room {
    * @param player_name 玩家名称
    * @returns 是否成功
    */
-  remove_player(player_name: string) {
+  offline_player(player_name: string) {
     const p = this.get_player(player_name);
     if (p) p.is_online = false;
     return true;
@@ -187,17 +177,13 @@ export class Room {
    * @param player_name 玩家名称
    * @returns 是否成功
    */
-  remove_player_completely(player_name: string) {
-    const index = this.players.findIndex((p) => p.name === player_name);
-    if (index !== -1) {
-      this.players.splice(index, 1);
-      return true;
-    }
-    return false;
+  remove_player(player_name: string) {
+    this.players.delete(player_name);
+    return true;
   }
 
   get_player(player_name: string) {
-    return this.players.find((p) => p.name === player_name) || null;
+    return this.players.get(player_name) || null;
   }
 
   /**
@@ -205,7 +191,7 @@ export class Room {
    * @returns 在线玩家列表
    */
   get_online_players() {
-    return this.players.filter((p) => p.is_online);
+    return Array.from(this.players.values()).filter((p) => p.is_online);
   }
 
   /**
@@ -339,7 +325,7 @@ export class Room {
    */
   all_players_have_ideas() {
     const ideas = this.game.gameInfo.ideas;
-    const players = this.players.map((item) => item.name);
+    const players = Array.from(this.players.keys());
     return players.every((player) => ideas[player]);
   }
 
@@ -360,7 +346,7 @@ export class Room {
    */
   all_players_have_roles() {
     const roles = this.game.gameInfo.roles;
-    const players = this.players.map((item) => item.name);
+    const players = Array.from(this.players.keys());
     return players.every((player) => roles[player]);
   }
 
@@ -369,7 +355,7 @@ export class Room {
    */
   get_selected_roles() {
     const roles = this.game.gameInfo.roles;
-    const players = this.players.map((item) => item.name);
+    const players = Array.from(this.players.keys());
     return players.map((player) => roles[player]);
   }
 }

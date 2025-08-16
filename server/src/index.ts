@@ -47,21 +47,60 @@ app.post("/rooms/reconnect", (req, res) => {
   return res.json({ room_id: room.id, success: true });
 });
 
+// 退出房间
+app.post("/rooms/exit", async (req, res) => {
+  const { player_name } = req.body;
+
+  console.log(req.body);
+
+  console.log(player_name, "退出房间");
+
+  const room = Room.get_by_player(player_name);
+  if (room) {
+    const player = room.get_player(player_name);
+
+    player?.socket?.close();
+
+    // 完全从房间中移除玩家（非标记离线，而是彻底删除）
+    room.remove_player(player_name);
+
+    // 获取移除玩家后的在线玩家列表
+    const remaining_online = room.get_online_players();
+
+    // 如果还有其他在线玩家，通知他们该玩家已离开
+    if (remaining_online.length) {
+      const updatedPlayers = room.getPlayersPayload();
+      await room.broadcast({
+        type: "player_leave",
+        data: {
+          player_name,
+          players: updatedPlayers,
+        },
+      });
+    }
+
+    // 房间清理：如果房间内没有任何玩家了，删除整个房间
+    if (room.get_online_players().length === 0) {
+      Room.remove(room.id);
+    }
+
+    return res.json({ success: true });
+  }
+
+  return res.json({ success: false });
+});
+
 // 获取房间列表
 app.get("/rooms", (_req, res) => {
   try {
     const all = Room.get_all();
     const list: any[] = [];
     for (const [id, room] of Object.entries(all)) {
-      const all_players = room.players;
       list.push({
         id,
-        player_count: all_players.length,
+        player_count: Object.keys(room.players).length,
         room_state: room.state,
-        players: all_players.map((p) => ({
-          name: p.name,
-          is_host: p.is_host,
-        })),
+        players: room.getPlayersPayload(),
       });
     }
     res.json({ success: true, rooms: list, total_count: list.length });

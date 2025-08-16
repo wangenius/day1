@@ -1,42 +1,41 @@
+import fs from "node:fs";
+import path from "node:path";
+import { Room } from "./Room.js";
 import {
+  GameInfo,
   GameState,
   RoleEnum,
   RoomState,
-  GameInfo,
   RoundInfo,
-  GameResult,
 } from "./types/types.js";
-import { Room } from "./Room.js";
-import { logger } from "./utils/logger.js";
 import { LLM } from "./utils/llm.js";
-import fs from "node:fs";
-import path from "node:path";
+import { logger } from "./utils/logger.js";
 
 /**
  * 游戏消息类型枚举
- * 
+ *
  * 定义了游戏过程中所有的状态变化和事件通知类型：
- * 
+ *
  * 连接相关：
  * - CONNECTION_SUCCESS: 连接成功
  * - PLAYER_JOIN/LEAVE: 玩家加入/离开
- * 
+ *
  * 游戏阶段：
  * - IDEAS_COMPLETE: 创业想法收集完成
  * - GAME_LOADING: 游戏加载中（AI生成背景）
  * - GAME_START: 游戏开始
  * - GAME_STARTED: 游戏正式开始（第一轮）
- * 
+ *
  * 角色相关：
  * - ROLE_SELECTED: 角色选择完成
- * 
+ *
  * 轮次相关：
  * - ROUND_LOADING: 轮次加载中（AI生成事件）
  * - ROUND_START: 轮次开始
  * - ROUND_PHASE: 轮次阶段切换
  * - ROUND_TICK: 轮次计时更新
  * - ACTION_SUBMITTED: 玩家行动提交
- * 
+ *
  * 游戏结束：
  * - GAME_COMPLETE: 游戏完成
  * - GAME_RESTART: 游戏重启
@@ -74,7 +73,7 @@ const P4 = readPrompt("prompt4.txt");
 
 /**
  * AI生成事件的数据结构
- * 
+ *
  * 用于定义LLM生成的游戏事件格式：
  * - situation: 当前轮次的情况描述
  * - event: 具体的事件内容和决策选项
@@ -94,46 +93,46 @@ interface GeneratedEvent {
 
 /**
  * 创建默认游戏信息对象
- * 
+ *
  * 初始化空的游戏状态，包含：
  * - 游戏状态设为PLAYING
  * - 空的结果报告
  * - 空的玩家想法和角色映射
  * - 空的背景故事和轮次数据
  * - 当前轮次设为1
- * 
+ *
  * @returns 初始化的游戏信息对象
  */
 function createDefaultGameInfo(): GameInfo {
   return {
     state: GameState.PLAYING,
     result: { report: "" },
-    ideas: {},           // 玩家名 -> 创业想法
-    selected_idea: "",   // 选中的创业想法
-    roles: {},           // 玩家名 -> 角色
-    background: "",      // AI生成的背景故事
-    rounds: {},          // 轮次号 -> 轮次信息
-    current_round: 1,    // 当前轮次
+    ideas: {}, // 玩家名 -> 创业想法
+    selected_idea: "", // 选中的创业想法
+    roles: {}, // 玩家名 -> 角色
+    background: "", // AI生成的背景故事
+    rounds: {}, // 轮次号 -> 轮次信息
+    current_round: 1, // 当前轮次
   };
 }
 
 /**
  * 游戏逻辑核心类
- * 
+ *
  * 职责说明：
  * 1. 游戏流程控制：管理5轮游戏的完整生命周期
  * 2. AI内容生成：集成LLM生成动态游戏内容
  * 3. 计时和超时管理：自动推进游戏进程，处理超时情况
  * 4. 结果计算：评分系统、成就生成、个人表现分析
  * 5. 状态同步：实时向客户端广播游戏状态变化
- * 
+ *
  * 核心特性：
  * - 基于AI的动态内容生成系统
  * - 多层定时器确保游戏节奏
  * - 完善的超时和异常处理机制
  * - 支持断线重连的状态恢复
  * - 个性化角色体验和私密信息
- * 
+ *
  * 技术实现：
  * - 状态机模式控制游戏阶段
  * - 事件驱动的消息广播系统
@@ -143,7 +142,7 @@ function createDefaultGameInfo(): GameInfo {
 export class Game {
   /** 游戏状态数据 - 包含所有游戏相关信息 */
   gameInfo: GameInfo;
-  
+
   /** 关联的房间实例 - 用于消息广播和玩家管理 */
   room: Room;
 
@@ -158,7 +157,7 @@ export class Game {
 
   /**
    * 构造函数 - 初始化游戏实例
-   * 
+   *
    * @param room 关联的房间实例
    */
   constructor(room: Room) {
@@ -338,22 +337,22 @@ export class Game {
 
   /**
    * 基于玩家创业想法生成背景故事
-   * 
+   *
    * 功能说明：
    * - 整合所有玩家的创业想法
    * - 使用AI生成统一的背景故事
    * - 结合玩家信息和角色设定
    * - 为后续事件生成提供上下文
-   * 
+   *
    * AI Prompt策略：
    * - 使用P1模板（prompt1.txt）
    * - 替换占位符：{initial_idea}、{players}
    * - 设置适中的temperature(0.7)保证创意性
-   * 
+   *
    * 错误处理：
    * - 输入验证：检查想法数组是否为空
    * - AI调用失败时抛出异常
-   * 
+   *
    * @param playerIdeas 所有玩家的创业想法数组
    * @returns Promise<生成的背景故事>
    * @throws Error 当没有玩家想法或AI生成失败时
@@ -388,29 +387,29 @@ export class Game {
 
   /**
    * 生成轮次事件 - AI驱动的动态内容生成
-   * 
+   *
    * 功能说明：
    * - 基于背景故事和历史经验生成新事件
    * - 为每个角色生成个性化私密信息
    * - 提供多个决策选项供玩家选择
    * - 确保事件的逻辑连贯性和挑战性
-   * 
+   *
    * AI生成流程：
    * 1. 构建Prompt：背景 + 当前轮次 + 历史经验
    * 2. 调用LLM生成JSON格式的事件数据
    * 3. 验证生成内容的完整性
    * 4. 重试机制：最多3次，失败返回默认结构
-   * 
+   *
    * 生成内容结构：
    * - situation: 情况描述
    * - event: 事件标题、描述、决策选项
    * - private_messages: 四个角色的私密信息
-   * 
+   *
    * 容错机制：
    * - 结构验证：确保包含所有必需字段
    * - 重试逻辑：AI失败时自动重试
    * - 降级处理：彻底失败时返回空结构
-   * 
+   *
    * @param round_num 当前轮次号（1-5）
    * @returns Promise<生成的事件数据>
    */
@@ -624,7 +623,7 @@ export class Game {
   private _calculatePlayerPerformance() {
     const gameInfo = this.gameInfo;
     const perf: Array<Record<string, any>> = [];
-    for (const p of this.room.players) {
+    for (const p of Object.values(this.room.players)) {
       // 计算玩家在所有轮次中的行动次数
       const action_count = Object.values(gameInfo.rounds).reduce(
         (s, roundInfo) => {
@@ -701,12 +700,7 @@ export class Game {
             privateMessages: roundInfo?.private_messages || {},
             playerActions: Object.entries(roundInfo?.player_actions || {}),
             waitingForPlayers: !this._allPlayersSubmitted(current_round),
-            players: this.room.players.map((p) => ({
-              name: p.name,
-              is_online: p.is_online,
-              role: this.gameInfo.roles[p.name] || null,
-              isHost: p.is_host,
-            })),
+            players: this.room.getPlayersPayload(),
           },
         };
         if (this.room) await this.room.broadcast(payload);
@@ -726,22 +720,22 @@ export class Game {
 
   /**
    * 清理房间运行时资源 - 防止内存泄漏
-   * 
+   *
    * 功能说明：
    * - 清理所有与房间相关的定时器
    * - 释放轮次计时和超时任务
    * - 防止房间删除后的内存泄漏
-   * 
+   *
    * 清理范围：
    * 1. 轮次计时任务（每秒更新）
    * 2. 轮次超时任务（3分钟超时）
    * 3. 阶段切换任务（定时切换游戏阶段）
-   * 
+   *
    * 调用时机：
    * - 房间被删除时
    * - 游戏异常结束时
    * - 系统维护清理时
-   * 
+   *
    * 安全性：
    * - 确保所有计时器都被正确清理
    * - 避免孤儿定时器继续运行
@@ -764,24 +758,24 @@ export class Game {
 
   /**
    * 处理玩家创业想法提交
-   * 
+   *
    * 功能说明：
    * - 记录玩家提交的创业想法
    * - 广播玩家状态更新
    * - 检查是否所有玩家都已提交
    * - 触发想法收集完成流程
-   * 
+   *
    * 业务逻辑：
    * 1. 验证玩家存在性
    * 2. 存储想法到gameInfo.ideas
    * 3. 广播玩家加入消息（包含想法信息）
    * 4. 检查完成度，触发后续流程
-   * 
+   *
    * 完成触发：
    * - 所有玩家都提交想法后
    * - 选择第一个玩家的想法作为主要想法
    * - 广播IDEAS_COMPLETE消息
-   * 
+   *
    * @param player_name 玩家名称
    * @param idea 创业想法内容
    */
@@ -794,23 +788,19 @@ export class Game {
       type: MessageType.PLAYER_JOIN,
       data: {
         player_name: player_name,
-        players: this.room.getPlayersPayload({
-          includeRole: true,
-          includeIdea: true,
-        }),
+        players: this.room.getPlayersPayload(),
       },
     });
     if (this.room.all_players_have_ideas()) {
       const firstPlayer = this.room.get_online_players()[0];
-      this.gameInfo.selected_idea = firstPlayer ? this.gameInfo.ideas[firstPlayer.name] || "" : "";
+      this.gameInfo.selected_idea = firstPlayer
+        ? this.gameInfo.ideas[firstPlayer.name] || ""
+        : "";
       await this.room.broadcast({
         type: MessageType.IDEAS_COMPLETE,
         data: {
           startup_idea: this.gameInfo.selected_idea,
-          players: this.room.getPlayersPayload({
-            includeRole: true,
-            includeIdea: true,
-          }),
+          players: this.room.getPlayersPayload(),
         },
       });
     }
@@ -838,27 +828,27 @@ export class Game {
 
   /**
    * 处理玩家角色选择
-   * 
+   *
    * 功能说明：
    * - 验证角色选择的合法性
    * - 防止重复选择和角色冲突
    * - 记录角色分配信息
    * - 检查是否可以开始游戏
-   * 
+   *
    * 验证规则：
    * 1. 玩家存在性检查
    * 2. 防止重复选择（已选择过的玩家）
    * 3. 角色有效性验证（必须是有效的RoleEnum）
    * 4. 角色唯一性检查（不能被其他玩家占用）
-   * 
+   *
    * 错误处理：
    * - 发送个人错误消息而非广播
    * - 保持其他玩家的正常游戏体验
-   * 
+   *
    * 完成检查：
    * - 所有玩家都选择角色后自动开始游戏
    * - 生成背景故事和第一轮事件
-   * 
+   *
    * @param player_name 玩家名称
    * @param role 选择的角色（CEO/CTO/CMO/COO）
    */
@@ -879,8 +869,11 @@ export class Game {
       });
       return;
     }
-    for (const p of this.room.players) {
-      if (p.name !== player_name && this.gameInfo.roles[p.name] === (role as RoleEnum)) {
+    for (const p of Object.values(this.room.players)) {
+      if (
+        p.name !== player_name &&
+        this.gameInfo.roles[p.name] === (role as RoleEnum)
+      ) {
         await this.room.send_to_player(player_name, {
           type: "role_selection_error",
           data: { message: `角色 ${role} 已被其他玩家选择，请选择其他角色` },
@@ -953,29 +946,29 @@ export class Game {
 
   /**
    * 处理游戏内玩家行动
-   * 
+   *
    * 功能说明：
    * - 记录玩家在当前轮次的决策选择
    * - 实时广播行动提交状态
    * - 检查是否所有玩家都已提交
    * - 触发轮次完成或下一轮开始
-   * 
+   *
    * 处理流程：
    * 1. 验证玩家和房间状态
    * 2. 记录行动到当前轮次数据
    * 3. 广播ACTION_SUBMITTED消息
    * 4. 检查提交完成度
    * 5. 触发轮次完成处理
-   * 
+   *
    * 状态检查：
    * - 玩家必须存在且在线
    * - 房间状态必须是PLAYING
    * - 自动取消轮次超时任务
-   * 
+   *
    * 完成处理：
    * - 所有玩家提交后立即处理轮次完成
    * - 进入下一轮或游戏结束流程
-   * 
+   *
    * @param player_name 玩家名称
    * @param action_data 行动数据，包含action字段
    */
@@ -1071,10 +1064,7 @@ export class Game {
     await this.room.broadcast({
       type: MessageType.GAME_RESTART,
       data: {
-        players: this.room.getPlayersPayload({
-          includeRole: true,
-          includeIdea: true,
-        }),
+        players: this.room.getPlayersPayload(),
       },
     });
   }

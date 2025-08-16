@@ -256,7 +256,7 @@ function RoomEntrance() {
                               {room.room_id}
                             </h3>
                             <span className="text-white/60 text-sm">
-                              ({room.player_count}/{room.max_players})
+                              ({room.players.length}/{room.max_players})
                             </span>
                           </div>
                           <div className="text-white/70 text-sm mb-2">
