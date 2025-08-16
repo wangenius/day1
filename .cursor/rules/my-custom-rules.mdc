@@ -2,4 +2,4 @@
 alwaysApply: true
 ---
 
-1. 所有与游戏状态和后端业务相关的，放到 GameContext 中去实现。
+1. 不要改动interface

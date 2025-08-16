@@ -1,4 +1,4 @@
-import { useGame } from "../context/GameContextCore";
+import { useGame } from "../context/GameContext";
 
 /**
  * 初始页面组件
@@ -6,12 +6,11 @@ import { useGame } from "../context/GameContextCore";
  */
 export function InitialPage() {
   const { handleInitialPageClick } = useGame();
-  const handleClick = handleInitialPageClick;
 
   return (
     <div
       className="min-h-screen w-full bg-stone-950 overflow-hidden cursor-pointer hover:opacity-90 transition-opacity flex flex-col justify-between p-4"
-      onClick={handleClick}
+      onClick={handleInitialPageClick}
     >
       {/* 顶部Day1标签 */}
       <div className="flex justify-center pt-8">

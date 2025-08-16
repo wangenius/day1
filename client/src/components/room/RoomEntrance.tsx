@@ -1,23 +1,28 @@
-import { useState, useRef, KeyboardEvent } from "react";
-import { useGame } from "../../context/GameContextCore";
+import { useState, useRef, KeyboardEvent, useEffect } from "react";
+import { useGame } from "../../context/GameContext";
 import { Button } from "../Button";
+import { RoomInfo } from "@/const/const";
 
 /**
  * 房间管理组件
  * 用户输入团队暗号加入房间的页面
  */
 function RoomEntrance() {
-  const { 
-    handleRoomAction, 
-    playerName, 
-    roomList, 
-    loadingRoomList, 
-    fetchRoomList 
+  const {
+    handleRoomAction,
+    playerName,
+    roomList,
+    loadingRoomList,
+    fetchRoomList,
   } = useGame();
   const [teamCode, setTeamCode] = useState<string[]>(["", "", "", ""]);
   const [loading, setLoading] = useState<boolean>(false);
   const [showRoomList, setShowRoomList] = useState<boolean>(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    console.log(roomList);
+  }, [roomList]);
 
   /**
    * 处理快速加入房间
@@ -40,8 +45,8 @@ function RoomEntrance() {
    * @param room - 房间信息
    * @returns 是否可以加入
    */
-  const canJoinRoom = (room: any): boolean => {
-    return room.game_state === 'lobby' && room.player_count < room.max_players;
+  const canJoinRoom = (room: RoomInfo): boolean => {
+    return room.state === "prepare" && room.player_count < 4;
   };
 
   /**
@@ -50,13 +55,13 @@ function RoomEntrance() {
    * @returns 状态描述
    */
   const getRoomStatusText = (room: any): string => {
-    if (room.game_state !== 'lobby') {
-      return '游戏中';
+    if (room.state !== "lobby") {
+      return "游戏中";
     }
     if (room.player_count >= room.max_players) {
-      return '已满员';
+      return "已满员";
     }
-    return '可加入';
+    return "可加入";
   };
 
   /**
@@ -119,6 +124,29 @@ function RoomEntrance() {
 
   return (
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col justify-center p-6 relative">
+      <button
+        onClick={() => {
+          localStorage.removeItem("startup_player_name");
+          window.location.reload();
+        }}
+        className="absolute top-4 left-4 flex items-center gap-2 text-white/70 hover:text-white transition-colors duration-200 text-sm font-normal font-['Cactus_Classical_Serif']"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16,17 21,12 16,7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+        退出账户
+      </button>
       <div className="absolute top-4 right-4 text-right text-white text-sm font-medium font-['Space_Grotesk'] [text-shadow:_0px_2px_1px_rgb(0_0_0_/_0.25)]">
         {playerName}
       </div>
@@ -236,7 +264,7 @@ function RoomEntrance() {
                           </div>
                           {room.players.length > 0 && (
                             <div className="text-white/60 text-sm">
-                              玩家: {room.players.map(p => p.name).join(', ')}
+                              玩家: {room.players.map((p) => p.name).join(", ")}
                             </div>
                           )}
                         </div>
@@ -245,7 +273,11 @@ function RoomEntrance() {
                           disabled={loading || !canJoinRoom(room)}
                           className="ml-4 px-4 py-2 bg-white/10 hover:bg-white/20 disabled:bg-white/5 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
                         >
-                          {loading ? "进入中..." : !canJoinRoom(room) ? getRoomStatusText(room) : "加入"}
+                          {loading
+                            ? "进入中..."
+                            : !canJoinRoom(room)
+                            ? getRoomStatusText(room)
+                            : "加入"}
                         </button>
                       </div>
                     </div>

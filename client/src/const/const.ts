@@ -1,8 +1,8 @@
 /**
- * 游戏状态枚举
- * 定义游戏的所有可能状态
+ * 游戏UX 页面枚举
+ * 定义游戏的所有可能页面
  */
-export const GAME_STATES = {
+export const GAME_UX_PAGEING = {
   /** 初始状态 */
   INITIAL: "initial",
   /** 欢迎页面 */
@@ -30,7 +30,7 @@ export const GAME_STATES = {
 /**
  * 游戏状态类型
  */
-export type GameState = (typeof GAME_STATES)[keyof typeof GAME_STATES];
+export type GameState = (typeof GAME_UX_PAGEING)[keyof typeof GAME_UX_PAGEING];
 
 /**
  * 服务器配置类型
@@ -52,16 +52,10 @@ export interface ServerConfig {
 export interface Player {
   /** 玩家名称 */
   name: string;
-  /** 玩家ID */
-  id?: string;
   /** 是否在线 */
   online?: boolean;
-  /** 选择的角色 */
-  role?: string;
-  /** 创业想法 */
-  idea?: string;
   /** 是否为房主 */
-  isHost?: boolean;
+  is_host?: boolean;
 }
 
 /**
@@ -96,21 +90,8 @@ export interface PlayerAction {
  * 游戏结果类型
  */
 export interface GameResult {
-  final_score: number;
-  success_level: string;
-  metrics: {
-    user_growth: number;
-    revenue: number;
-    market_share: number;
-    team_size: number;
-  };
-  achievements: string[];
-  timeline: {
-    round: number;
-    event: string;
-    impact: string;
-  }[];
-  final_report: string;
+  /** 最终报告 */
+  report: string;
 }
 
 /**
@@ -123,10 +104,6 @@ export interface RoleDefinition {
   name: string;
   /** 角色描述 */
   description: string;
-  /** 角色技能 */
-  abilities?: string[];
-  /** 角色图标 */
-  icon?: string;
 }
 
 /**
@@ -148,13 +125,13 @@ export interface WebSocketMessage {
  */
 export interface RoomStatus {
   /** 房间ID */
-  roomId: string;
+  room_id: string;
   /** 玩家数量 */
   player_count: number;
   /** 游戏状态 */
-  game_state: string;
+  state: string;
   /** 是否已满 */
-  is_full?: boolean;
+  is_full: boolean;
 }
 
 /**
@@ -167,25 +144,11 @@ export interface RoomInfo {
   player_count: number;
   /** 最大玩家数 */
   max_players: number;
-  /** 游戏状态 */
-  game_state: string;
-  /** 创建时间 */
-  created_at: string | null;
+  /** 房间状态 */
+  state: "prepare" | "playing";
   /** 玩家列表 */
-  players: Array<{
-    name: string;
-    is_host: boolean;
-  }>;
+  players: Player[];
 }
 
-/**
- * 房间列表响应类型
- */
-export interface RoomListResponse {
-  /** 操作是否成功 */
-  success: boolean;
-  /** 房间列表 */
-  rooms: RoomInfo[];
-  /** 房间总数 */
-  total_count: number;
-}
+
+

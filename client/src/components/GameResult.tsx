@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import type { GameResult as GameResultType } from "../const/const";
-import { useGame } from "../context/GameContextCore";
+import { useGame } from "../context/GameContext";
 
 /**
  * 打印机效果组件属性
@@ -97,7 +97,7 @@ function PrinterEffect({
   gameResult,
 }: PrinterEffectProps) {
   const handleExport = (): void => {
-    const content = gameResult?.final_report ?? "";
+    const content = gameResult?.report ?? "";
     if (!content) return;
     const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -125,7 +125,7 @@ function PrinterEffect({
       <div className="absolute top-4 right-4 z-30">
         <button
           onClick={handleExport}
-          disabled={!gameResult?.final_report}
+          disabled={!gameResult?.report}
           className="bg-white text-black px-4 py-2 rounded-lg shadow hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           导出
@@ -182,7 +182,7 @@ function PrinterEffect({
                 </div>
               )}
 
-              {gameResult?.final_report && (
+              {gameResult?.report && (
                 <div className="markdown prose prose-sm max-w-none">
                   <ReactMarkdown
                     components={{
@@ -230,7 +230,7 @@ function PrinterEffect({
                       ),
                     }}
                   >
-                    {gameResult.final_report}
+                    {gameResult.report}
                   </ReactMarkdown>
                 </div>
               )}

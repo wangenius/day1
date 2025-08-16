@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useGame } from "../context/GameContextCore";
+import { useGame } from "../context/GameContext";
 
 /**
  * 动画阶段类型

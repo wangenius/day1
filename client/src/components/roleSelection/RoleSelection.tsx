@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useGame } from "../../context/GameContextCore";
+import { useGame } from "../../context/GameContext";
 import RoleList from "./RoleList";
 import { ROLES } from "../../const/roles";
 

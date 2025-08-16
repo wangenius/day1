@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useGame } from "../../context/GameContextCore";
+import { useGame } from "../../context/GameContext";
 import { InfoAndOptions } from "./InfoAndOptions";
 import { EventDisplay } from "./EventDisplay";
 import { PrivateModal } from "./PrivateModal";

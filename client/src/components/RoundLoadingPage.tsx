@@ -1,4 +1,4 @@
-import { useGame } from "../context/GameContextCore";
+import { useGame } from "../context/GameContext";
 
 /**
  * 轮次加载页面组件

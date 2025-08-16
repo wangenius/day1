@@ -8,35 +8,35 @@ import RoleSelection from "./components/roleSelection/RoleSelection";
 import RoomEntrance from "./components/room/RoomEntrance";
 import RoundLoadingPage from "./components/RoundLoadingPage";
 import UserNamePage from "./components/WelcomePage";
-import { GAME_STATES } from "./const/const";
-import { useGame } from "./context/GameContextCore";
+import { GAME_UX_PAGEING } from "./const/const";
+import { useGame } from "./context/GameContext";
 
 function App() {
   const { gameState } = useGame();
 
   const renderCurrentState = () => {
     switch (gameState) {
-      case GAME_STATES.INITIAL:
+      case GAME_UX_PAGEING.INITIAL:
         return <InitialPage />;
-      case GAME_STATES.WELCOME:
+      case GAME_UX_PAGEING.WELCOME:
         return <UserNamePage />;
-      case GAME_STATES.ROOM_SELECTION:
+      case GAME_UX_PAGEING.ROOM_SELECTION:
         return <RoomEntrance />;
-      case GAME_STATES.LOBBY:
+      case GAME_UX_PAGEING.LOBBY:
         return <IdeaPickerInRoom />;
-      case GAME_STATES.ROLE_SELECTION:
+      case GAME_UX_PAGEING.ROLE_SELECTION:
         return <RoleSelection />;
-      case GAME_STATES.LOADING:
+      case GAME_UX_PAGEING.LOADING:
         return <GameLoadingPage />;
-      case GAME_STATES.ROUND_LOADING:
+      case GAME_UX_PAGEING.ROUND_LOADING:
         return <RoundLoadingPage />;
-      case GAME_STATES.EVENT_GENERATION:
+      case GAME_UX_PAGEING.EVENT_GENERATION:
         return <EventGeneration />;
-      case GAME_STATES.PLAYING:
+      case GAME_UX_PAGEING.PLAYING:
         return <GamePlay />;
-      case GAME_STATES.ROUND_RESULT:
+      case GAME_UX_PAGEING.ROUND_RESULT:
         return null;
-      case GAME_STATES.RESULT:
+      case GAME_UX_PAGEING.RESULT:
         return <GameResult />;
       default:
         return <UserNamePage />;

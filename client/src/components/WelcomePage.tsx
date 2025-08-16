@@ -1,5 +1,5 @@
 import { useState, FormEvent } from "react";
-import { useGame } from "../context/GameContextCore";
+import { useGame } from "../context/GameContext";
 import { Button } from "./Button";
 
 /**

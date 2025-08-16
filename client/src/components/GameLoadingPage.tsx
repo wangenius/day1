@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useGame } from "../context/GameContextCore";
+import { useGame } from "../context/GameContext";
 import type { Player } from "../const/const";
 
 /**
