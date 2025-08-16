@@ -1,15 +1,63 @@
 import {
   GameState,
-  MessageType,
   RoleEnum,
-  DecisionEvent,
-  GeneratedEvent,
+  RoomState,
+  GameInfo,
+  RoundInfo,
+  GameResult,
 } from "./types/types.js";
 import { Room } from "./Room.js";
 import { logger } from "./utils/logger.js";
 import { LLM } from "./utils/llm.js";
 import fs from "node:fs";
 import path from "node:path";
+
+/**
+ * 游戏消息类型枚举
+ * 
+ * 定义了游戏过程中所有的状态变化和事件通知类型：
+ * 
+ * 连接相关：
+ * - CONNECTION_SUCCESS: 连接成功
+ * - PLAYER_JOIN/LEAVE: 玩家加入/离开
+ * 
+ * 游戏阶段：
+ * - IDEAS_COMPLETE: 创业想法收集完成
+ * - GAME_LOADING: 游戏加载中（AI生成背景）
+ * - GAME_START: 游戏开始
+ * - GAME_STARTED: 游戏正式开始（第一轮）
+ * 
+ * 角色相关：
+ * - ROLE_SELECTED: 角色选择完成
+ * 
+ * 轮次相关：
+ * - ROUND_LOADING: 轮次加载中（AI生成事件）
+ * - ROUND_START: 轮次开始
+ * - ROUND_PHASE: 轮次阶段切换
+ * - ROUND_TICK: 轮次计时更新
+ * - ACTION_SUBMITTED: 玩家行动提交
+ * 
+ * 游戏结束：
+ * - GAME_COMPLETE: 游戏完成
+ * - GAME_RESTART: 游戏重启
+ */
+enum MessageType {
+  CONNECTION_SUCCESS = "connection_success",
+  PLAYER_JOIN = "player_join",
+  PLAYER_LEAVE = "player_leave",
+  IDEAS_COMPLETE = "ideas_complete",
+  GAME_LOADING = "game_loading",
+  GAME_START = "game_start",
+  GAME_STARTED = "game_started",
+  ROLE_SELECTED = "role_selected",
+  ROUND_LOADING = "round_loading",
+  ROUND_START = "round_start",
+  ROUND_PHASE = "round_phase",
+  ROUND_TICK = "round_tick",
+  ACTION_SUBMITTED = "action_submitted",
+  GAME_COMPLETE = "game_complete",
+  GAME_RESTART = "game_restart",
+}
 
 const promptDir = path.join(
   path.dirname(new URL(import.meta.url).pathname),
@@ -24,102 +72,119 @@ const P2 = readPrompt("prompt2.txt");
 const P3 = readPrompt("prompt3.txt");
 const P4 = readPrompt("prompt4.txt");
 
-function timeout(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
+/**
+ * AI生成事件的数据结构
+ * 
+ * 用于定义LLM生成的游戏事件格式：
+ * - situation: 当前轮次的情况描述
+ * - event: 具体的事件内容和决策选项
+ * - private_messages: 每个角色的私密信息
+ * - is_default_event: 是否为默认事件（AI生成失败时的兜底）
+ */
+interface GeneratedEvent {
+  situation?: string;
+  event: {
+    event_title: string;
+    event_description: string;
+    decision_options: Record<string, string>;
+  };
+  private_messages: Record<string, string>;
+  is_default_event?: boolean;
 }
 
-// 每房间的对局运行时状态
-type RuntimeState = {
-  current_round: number;
-  background: string;
-  dynamic_roles: Record<
-    string,
-    { name: string; description: string; actions?: string[] }
-  > | null;
-  game_result: any | null;
-  round_events: Record<number, DecisionEvent>;
-  round_private_messages: Record<number, Record<string, string>>;
-  dynamic_round_info: Record<number, string>;
-  round_situation: Record<number, string | Record<string, unknown>>;
-  current_phase: "event_display" | "info_and_options" | "discussion" | null;
-  phase_remain: number;
-  round_actions: Record<number, Array<Record<string, any>>>;
-};
-
-function createDefaultState(): RuntimeState {
+/**
+ * 创建默认游戏信息对象
+ * 
+ * 初始化空的游戏状态，包含：
+ * - 游戏状态设为PLAYING
+ * - 空的结果报告
+ * - 空的玩家想法和角色映射
+ * - 空的背景故事和轮次数据
+ * - 当前轮次设为1
+ * 
+ * @returns 初始化的游戏信息对象
+ */
+function createDefaultGameInfo(): GameInfo {
   return {
-    current_round: 1,
-    background: "",
-    dynamic_roles: null,
-    game_result: null,
-    round_events: {},
-    round_private_messages: {},
-    dynamic_round_info: {},
-    round_situation: {},
-    current_phase: null,
-    phase_remain: 180,
-    round_actions: {},
+    state: GameState.PLAYING,
+    result: { report: "" },
+    ideas: {},           // 玩家名 -> 创业想法
+    selected_idea: "",   // 选中的创业想法
+    roles: {},           // 玩家名 -> 角色
+    background: "",      // AI生成的背景故事
+    rounds: {},          // 轮次号 -> 轮次信息
+    current_round: 1,    // 当前轮次
   };
 }
 
 /**
- * 游戏处理类
- * 负责游戏逻辑的实现
- * 包括游戏状态的维护、事件的生成、玩家的行动处理等
+ * 游戏逻辑核心类
+ * 
+ * 职责说明：
+ * 1. 游戏流程控制：管理5轮游戏的完整生命周期
+ * 2. AI内容生成：集成LLM生成动态游戏内容
+ * 3. 计时和超时管理：自动推进游戏进程，处理超时情况
+ * 4. 结果计算：评分系统、成就生成、个人表现分析
+ * 5. 状态同步：实时向客户端广播游戏状态变化
+ * 
+ * 核心特性：
+ * - 基于AI的动态内容生成系统
+ * - 多层定时器确保游戏节奏
+ * - 完善的超时和异常处理机制
+ * - 支持断线重连的状态恢复
+ * - 个性化角色体验和私密信息
+ * 
+ * 技术实现：
+ * - 状态机模式控制游戏阶段
+ * - 事件驱动的消息广播系统
+ * - 基于Promise的异步AI调用
+ * - 内存安全的定时器管理
  */
 export class Game {
-  // 轮次行动超时时间（秒）
+  /** 游戏状态数据 - 包含所有游戏相关信息 */
+  gameInfo: GameInfo;
+  
+  /** 关联的房间实例 - 用于消息广播和玩家管理 */
+  room: Room;
+
+  /** 轮次行动超时时间（秒） - 玩家必须在此时间内提交行动 */
   static ROUND_ACTION_TIMEOUT_SECONDS = 180;
 
-  // 轮次行动超时任务
+  /** 轮次行动超时任务管理器 - 使用房间ID:轮次号作为键 */
   private static _round_timeout_tasks: Map<string, NodeJS.Timeout> = new Map();
 
-  // 轮次计时任务
+  /** 轮次计时任务管理器 - 每秒更新剩余时间并广播 */
   private static _round_tick_tasks: Map<string, NodeJS.Timeout> = new Map();
 
-  // 每房间运行时状态
-  private static _runtime: Map<string, RuntimeState> = new Map();
-
-  private static _getState(room_id: string) {
-    if (!Game._runtime.has(room_id))
-      Game._runtime.set(room_id, createDefaultState());
-    return Game._runtime.get(room_id)!;
+  /**
+   * 构造函数 - 初始化游戏实例
+   * 
+   * @param room 关联的房间实例
+   */
+  constructor(room: Room) {
+    this.room = room;
+    this.gameInfo = createDefaultGameInfo();
   }
-
-  // 任务键生成
-  private static _taskKey(room_id: string, round: number) {
-    return `${room_id}:${round}`;
+  private _taskKey(roomId: string, round: number) {
+    return `${roomId}:${round}`;
   }
-
-  // -------------------- 生成/分析逻辑（从 Room 迁移至此） --------------------
-  private static _buildPreviousExperience(room: Room, upToRound: number) {
-    const state = Game._getState(room.id);
+  private _buildPreviousExperience(upToRound: number) {
+    const gameInfo = this.gameInfo;
     if (upToRound <= 1) return "";
     const parts: string[] = [];
     for (let r = 1; r < upToRound; r++) {
-      let eventText = "暂无事件";
-      const eventObj = state.round_events[r];
-      if (eventObj) {
-        const title =
-          (eventObj as any).event_title || (eventObj as any).title || "";
-        const desc =
-          (eventObj as any).event_description ||
-          (eventObj as any).description ||
-          "";
-        eventText = `${title} - ${desc}`.replace(/ -$/, "");
+      const roundInfo = gameInfo.rounds[r];
+      if (roundInfo) {
+        const eventText = roundInfo.situation || "暂无事件";
+        const actionsText = Object.entries(roundInfo.player_actions)
+          .map(([player, action]) => `${player}: ${action}`)
+          .join(", ");
+        parts.push(
+          `第${r}轮：${eventText}\n玩家决策：${actionsText || "暂无决策"}`
+        );
+      } else {
+        parts.push(`第${r}轮：暂无数据`);
       }
-      const normalize = (val: any) =>
-        val == null
-          ? ""
-          : typeof val === "object"
-          ? String((val as any).impact || val)
-          : String(val);
-      let resultText = "暂无结果";
-      if (state.round_situation[r + 1])
-        resultText = normalize(state.round_situation[r + 1]);
-      else if (state.round_situation[r])
-        resultText = normalize(state.round_situation[r]);
-      parts.push(`第${r}轮事件：${eventText}\n第${r}轮结果：${resultText}`);
     }
     return parts.join("\n\n");
   }
@@ -141,114 +206,159 @@ export class Game {
     return true;
   }
 
-  private static _getDefaultEvent(round_num: number): GeneratedEvent {
-    const default_events: Record<number, DecisionEvent> = {
-      1: {
-        event_title: "团队组建挑战",
-        event_description:
-          "创业初期，团队需要明确职责与合作方式，迎来第一个团队决策。",
-        decision_options: {
-          A: "立即制定详细分工与流程",
-          B: "保持灵活、边做边改",
-          C: "优先建立团队文化共识",
-        },
-      },
-      2: {
-        event_title: "产品开发方向",
-        event_description: "产品概念已定，需要决定开发优先级与技术路线。",
-        decision_options: {
-          A: "专注核心功能做MVP",
-          B: "全面开发功能完整",
-          C: "重点研发创新技术",
-        },
-      },
-      3: {
-        event_title: "市场进入策略",
-        event_description: "产品将近完成，制定市场推广与获客策略。",
-        decision_options: {
-          A: "大规模营销快速占领",
-          B: "精准定位稳步推进",
-          C: "小范围测试后调整",
-        },
-      },
-      4: {
-        event_title: "融资决策",
-        event_description: "关键阶段，面临融资与股权选择。",
-        decision_options: {
-          A: "寻求VC加速发展",
-          B: "自主发展控股权稀释",
-          C: "找战略投资者获资源",
-        },
-      },
-      5: {
-        event_title: "规模化挑战",
-        event_description: "业务增长，如何应对规模化挑战。",
-        decision_options: {
-          A: "扩张团队与规模",
-          B: "优化流程提效率",
-          C: "多元化拓展新线",
-        },
-      },
-    };
-    const event = default_events[round_num] || default_events[5];
-    const pm = {
-      CEO: `第${round_num}轮：权衡各方并做最终决策。`,
-      CTO: `第${round_num}轮：从技术角度评估选项。`,
-      CMO: `第${round_num}轮：关注市场反应与品牌影响。`,
-      COO: `第${round_num}轮：关注成本与效率影响。`,
-    } as Record<string, string>;
-    return {
-      situation: `第${round_num}轮：公司进入新阶段，面临重要决策。`,
-      event,
-      private_messages: pm,
-      is_default_event: true,
-    };
+  private _allPlayersSubmitted(round_num: number) {
+    const roundInfo = this.gameInfo.rounds[round_num];
+    if (!roundInfo) return false;
+    const online = this.room.get_online_players();
+    const submitted = Object.keys(roundInfo.player_actions);
+    return submitted.length === online.length;
   }
 
-  // 基础辅助（同原 Room 上的方法）
-  private static _allPlayersSubmitted(room: Room, round_num: number) {
-    const state = Game._getState(room.id);
-    const online = room.get_online_players();
-    const submitted = new Set<string>();
-    const arr = state.round_actions[round_num] || [];
-    arr.forEach((a) => submitted.add((a as any)?.playerName));
-    return submitted.size === online.length;
-  }
-
-  private static _addRoundAction(
-    room: Room,
+  private _addRoundAction(
     round_num: number,
-    action: Record<string, any>
+    player_name: string,
+    action: string
   ) {
-    const state = Game._getState(room.id);
-    if (!state.round_actions[round_num]) state.round_actions[round_num] = [];
-    state.round_actions[round_num] = state.round_actions[round_num].filter(
-      (a) => (a as any)?.playerName !== (action as any)?.playerName
-    );
-    state.round_actions[round_num].push(action);
+    const gameInfo = this.gameInfo;
+    if (!gameInfo.rounds[round_num]) {
+      gameInfo.rounds[round_num] = {
+        situation: "",
+        decision_options: {},
+        private_messages: {},
+        player_actions: {},
+        phase_remain: 180,
+      };
+    }
+    gameInfo.rounds[round_num].player_actions[player_name] = action;
   }
 
-  private static _getRoundInfo(room: Room, round_num: number) {
-    const state = Game._getState(room.id);
-    if (state.dynamic_round_info[round_num])
-      return state.dynamic_round_info[round_num];
-    return "";
+  private _getRoundInfo(round_num: number) {
+    const roundInfo = this.gameInfo.rounds[round_num];
+    return roundInfo?.situation || "";
   }
 
-  private static _setPhase(
-    room: Room,
-    phase: RuntimeState["current_phase"],
-    remain: number
-  ) {
-    const state = Game._getState(room.id);
-    state.current_phase = phase;
-    state.phase_remain = remain;
+  private _setPhaseRemain(round_num: number, remain: number) {
+    const roundInfo = this.gameInfo.rounds[round_num];
+    if (roundInfo) {
+      roundInfo.phase_remain = remain;
+    }
+  }
+
+  // 统一：确保背景与角色已生成
+  private async _ensureBackgroundAndRoles() {
+    const gameInfo = this.gameInfo;
+
+    // 注意：ideas 和 roles 应该已经通过 handle_startup_idea 和 handle_role_selection 方法设置了
+    // 这里我们只需要确保背景已生成
+
+    if (!gameInfo.background) {
+      const ideas = Object.values(gameInfo.ideas);
+      try {
+        gameInfo.background = await this.generateBackgroundFromIdeas(ideas);
+      } catch {
+        gameInfo.background = "创业团队正在开始他们的创业之旅...";
+      }
+    }
+
+    return gameInfo;
+  }
+
+  // 统一：生成并写入当轮事件数据
+  private async _prepareRoundData(round_num: number) {
+    const gameInfo = this.gameInfo;
+    const event = await this.generateEvent(round_num);
+
+    // 创建 RoundInfo
+    const roundInfo: RoundInfo = {
+      situation: event.situation || "",
+      decision_options: event.event.decision_options,
+      private_messages: event.private_messages,
+      player_actions: {},
+      phase_remain: 180,
+    };
+
+    gameInfo.rounds[round_num] = roundInfo;
+    return event;
+  }
+
+  // 统一：到点为未提交玩家自动提交
+  private async _autoSubmitMissingPlayers(round_num: number, reason: string) {
+    const roundInfo = this.gameInfo.rounds[round_num];
+    if (!roundInfo) return;
+
+    const option_keys = Object.keys(roundInfo.decision_options);
+    if (option_keys.length === 0) {
+      option_keys.push("A", "B", "C");
+    }
+
+    const online = this.room.get_online_players();
+    const submitted = new Set(Object.keys(roundInfo.player_actions));
+
+    for (const p of online) {
+      if (!submitted.has(p.name)) {
+        const choice =
+          option_keys[Math.floor(Math.random() * option_keys.length)] || "A";
+        await this.handle_game_action(p.name, { action: choice, reason });
+      }
+    }
+  }
+
+  // 统一：安排阶段切换与tick
+  private _schedulePhaseTransitions(expected_round: number) {
+    setTimeout(async () => {
+      const r = this.room;
+      if (!r) return;
+      const gameInfo = this.gameInfo;
+      if (
+        gameInfo.current_round !== expected_round ||
+        r.state !== RoomState.PLAYING
+      )
+        return;
+      await r.broadcast({
+        type: MessageType.ROUND_PHASE,
+        data: { phase: "info_and_options", round: expected_round },
+      });
+    }, 10000);
+    setTimeout(async () => {
+      const r = this.room;
+      if (!r) return;
+      const gameInfo = this.gameInfo;
+      if (
+        gameInfo.current_round !== expected_round ||
+        r.state !== RoomState.PLAYING
+      )
+        return;
+      await r.broadcast({
+        type: MessageType.ROUND_PHASE,
+        data: { phase: "discussion", round: expected_round },
+      });
+    }, 30000);
+    this._startRoundTick();
   }
 
   /**
-   * 游戏处理类主体
+   * 基于玩家创业想法生成背景故事
+   * 
+   * 功能说明：
+   * - 整合所有玩家的创业想法
+   * - 使用AI生成统一的背景故事
+   * - 结合玩家信息和角色设定
+   * - 为后续事件生成提供上下文
+   * 
+   * AI Prompt策略：
+   * - 使用P1模板（prompt1.txt）
+   * - 替换占位符：{initial_idea}、{players}
+   * - 设置适中的temperature(0.7)保证创意性
+   * 
+   * 错误处理：
+   * - 输入验证：检查想法数组是否为空
+   * - AI调用失败时抛出异常
+   * 
+   * @param playerIdeas 所有玩家的创业想法数组
+   * @returns Promise<生成的背景故事>
+   * @throws Error 当没有玩家想法或AI生成失败时
    */
-  static async generateBackgroundFromIdeas(room: Room, playerIdeas: string[]) {
+  async generateBackgroundFromIdeas(playerIdeas: string[]) {
     if (!playerIdeas || playerIdeas.length === 0)
       throw new Error("没有玩家想法");
     const combined = playerIdeas
@@ -256,17 +366,17 @@ export class Game {
       .map((i) => `- ${i}`)
       .join("\n");
     let prompt = P1.replace("{initial_idea}", combined);
-    const playersInfo = room
+    const playersInfo = this.room
       .get_online_players()
-      .map((p) => `${p.name}(${p.role || "未选择角色"})`)
+      .map((p) => `${p.name}(${this.gameInfo.roles[p.name] || "未选择角色"})`)
       .join("、");
     prompt = prompt.replace("{players}", playersInfo);
-    const state = Game._getState(room.id);
-    state.background = await new LLM().text(prompt, { temperature: 0.7 });
-    return state.background;
+    const gameInfo = this.gameInfo;
+    gameInfo.background = await new LLM().text(prompt, { temperature: 0.7 });
+    return gameInfo.background;
   }
 
-  static async generateRolesFromBackground(background: string) {
+  async generateRolesFromBackground(background: string) {
     if (!background) throw new Error("背景故事不能为空");
     const prompt = ROLE_PROMPT.replace("{background}", background);
     const defs = (await new LLM().json(prompt, { temperature: 0.7 })) as Record<
@@ -276,15 +386,39 @@ export class Game {
     return defs;
   }
 
-  static async generateEvent(
-    room: Room,
-    round_num: number
-  ): Promise<GeneratedEvent> {
-    const state = Game._getState(room.id);
-    let prompt = P2.replace("{background}", state.background || "");
+  /**
+   * 生成轮次事件 - AI驱动的动态内容生成
+   * 
+   * 功能说明：
+   * - 基于背景故事和历史经验生成新事件
+   * - 为每个角色生成个性化私密信息
+   * - 提供多个决策选项供玩家选择
+   * - 确保事件的逻辑连贯性和挑战性
+   * 
+   * AI生成流程：
+   * 1. 构建Prompt：背景 + 当前轮次 + 历史经验
+   * 2. 调用LLM生成JSON格式的事件数据
+   * 3. 验证生成内容的完整性
+   * 4. 重试机制：最多3次，失败返回默认结构
+   * 
+   * 生成内容结构：
+   * - situation: 情况描述
+   * - event: 事件标题、描述、决策选项
+   * - private_messages: 四个角色的私密信息
+   * 
+   * 容错机制：
+   * - 结构验证：确保包含所有必需字段
+   * - 重试逻辑：AI失败时自动重试
+   * - 降级处理：彻底失败时返回空结构
+   * 
+   * @param round_num 当前轮次号（1-5）
+   * @returns Promise<生成的事件数据>
+   */
+  async generateEvent(round_num: number): Promise<GeneratedEvent> {
+    const gameInfo = this.gameInfo;
+    let prompt = P2.replace("{background}", gameInfo.background || "");
     prompt = prompt.replace("{current_round}", String(round_num));
-    const prev =
-      Game._buildPreviousExperience(room, round_num) || "暂无之前经历";
+    const prev = this._buildPreviousExperience(round_num) || "暂无之前经历";
     prompt = prompt.replace("{previous_experience}", prev);
 
     const llm = new LLM();
@@ -305,168 +439,202 @@ export class Game {
         // retry
       }
     }
-    return Game._getDefaultEvent(round_num);
+    return {
+      situation: "",
+      event: {
+        event_title: "",
+        event_description: "",
+        decision_options: {},
+      },
+      private_messages: {},
+    };
   }
 
-  static async generateRoundAnalysis(room: Room, current_round: number) {
-    const state = Game._getState(room.id);
+  async generateRoundAnalysis(current_round: number) {
+    const gameInfo = this.gameInfo;
     if (current_round <= 1) {
-      state.round_situation[current_round] = "";
       return "";
     }
     const prev = current_round - 1;
-    const previous_experience = Game._buildPreviousExperience(room, prev);
+    const previous_experience = this._buildPreviousExperience(prev);
     let eventText = "";
-    const e = state.round_events[prev];
-    if (e) {
-      const title = (e as any).event_title || (e as any).title || "";
-      const desc = (e as any).event_description || (e as any).description || "";
-      eventText = `${title} - ${desc}`.replace(/ -$/, "");
+    const prevRoundInfo = gameInfo.rounds[prev];
+    if (prevRoundInfo) {
+      eventText = prevRoundInfo.situation || "暂无事件";
     }
+
     const getChoice = (role: RoleEnum) => {
-      const actions = state.round_actions[prev] || [];
-      const found = actions.find((a) => (a as any).role === role);
-      return (found as any)?.action || "";
+      const playerName = Object.keys(gameInfo.roles).find(
+        (name) => gameInfo.roles[name] === role
+      );
+      if (playerName && prevRoundInfo?.player_actions[playerName]) {
+        return prevRoundInfo.player_actions[playerName];
+      }
+      return "";
     };
+
     let prompt = P3;
-    prompt = prompt.replace("{background}", state.background || "");
+    prompt = prompt.replace("{background}", gameInfo.background || "");
     prompt = prompt.replace("{previous_experience}", previous_experience || "");
     prompt = prompt.replace("{event}", eventText);
     prompt = prompt.replace("{ceo_choice}", getChoice(RoleEnum.CEO));
     prompt = prompt.replace("{cto_choice}", getChoice(RoleEnum.CTO));
     prompt = prompt.replace("{coo_choice}", getChoice(RoleEnum.COO));
     prompt = prompt.replace("{cmo_choice}", getChoice(RoleEnum.CMO));
+
     let analysis = "";
     try {
       analysis = await new LLM().text(prompt, { temperature: 0.7 });
     } catch (e) {
       analysis = `第${prev}轮选择产生的影响：数据不足或生成失败。`;
     }
-    state.round_situation[current_round] = analysis;
+
+    // 更新当前轮次的情况描述
+    if (!gameInfo.rounds[current_round]) {
+      gameInfo.rounds[current_round] = {
+        situation: analysis,
+        decision_options: {},
+        private_messages: {},
+        player_actions: {},
+        phase_remain: 180,
+      };
+    } else {
+      gameInfo.rounds[current_round].situation = analysis;
+    }
+
     return analysis;
   }
 
-  static generateFinalReport(room: Room) {
-    const state = Game._getState(room.id);
+  async generateFinalReport() {
+    const gameInfo = this.gameInfo;
     const outputs: string[] = [];
     for (let round = 1; round <= 5; round++) {
       const parts: string[] = [];
-      const sit = state.round_situation[round];
-      if (sit)
-        parts.push(
-          `第${round}轮情况：${
-            typeof sit === "object"
-              ? String((sit as any).impact || sit)
-              : String(sit)
-          }`
-        );
-      const ev = state.round_events[round];
-      if (ev) {
-        const title = (ev as any).event_title || (ev as any).title || "";
-        const desc =
-          (ev as any).event_description || (ev as any).description || "";
-        parts.push(`事件：${`${title} - ${desc}`.replace(/ -$/, "")}`);
-      }
-      const actions = state.round_actions[round] || [];
-      if (actions.length) {
-        const summary = actions
-          .map(
-            (a) =>
-              `${(a as any).playerName || (a as any).player}(${String(
-                ((a as any).role as any)?.toString?.() || (a as any).role || ""
-              )})：${(a as any).action || ""}`
-          )
-          .join("\n");
-        parts.push(`玩家决策：\n${summary}`);
+      const roundInfo = gameInfo.rounds[round];
+      if (roundInfo) {
+        if (roundInfo.situation) {
+          parts.push(`第${round}轮情况：${roundInfo.situation}`);
+        }
+        if (Object.keys(roundInfo.player_actions).length > 0) {
+          const summary = Object.entries(roundInfo.player_actions)
+            .map(([playerName, action]) => {
+              const role = gameInfo.roles[playerName] || "未知角色";
+              return `${playerName}(${role})：${action}`;
+            })
+            .join("\n");
+          parts.push(`玩家决策：\n${summary}`);
+        }
       }
       outputs.push(parts.length ? parts.join("\n") : `第${round}轮：暂无数据`);
     }
-    let prompt = P4.replace("{background}", state.background || "");
+
+    let prompt = P4.replace("{background}", gameInfo.background || "");
     prompt = prompt.replace("{output1}", outputs[0] || "暂无数据");
     prompt = prompt.replace("{output2}", outputs[1] || "暂无数据");
     prompt = prompt.replace("{output3}", outputs[2] || "暂无数据");
     prompt = prompt.replace("{output4}", outputs[3] || "暂无数据");
     prompt = prompt.replace("{output5}", outputs[4] || "暂无数据");
-    const ceo = room.players.find((p) => p.role === RoleEnum.CEO);
-    if (ceo)
+
+    // 替换玩家姓名
+    const ceoName = Object.keys(gameInfo.roles).find(
+      (name) => gameInfo.roles[name] === RoleEnum.CEO
+    );
+    if (ceoName) {
       prompt = prompt.replace(
         "CEO/Founder：[玩家姓名]",
-        `CEO/Founder：${ceo.name}`
+        `CEO/Founder：${ceoName}`
       );
-    const map: Record<RoleEnum, string> = {
+    }
+
+    const roleMap: Record<RoleEnum, string> = {
       [RoleEnum.CTO]: "CTO",
       [RoleEnum.CMO]: "CMO",
       [RoleEnum.COO]: "COO",
       [RoleEnum.CEO]: "CEO",
-    } as any;
-    for (const p of room.players)
-      if (p.role && p.role !== RoleEnum.CEO)
+    };
+
+    for (const [playerName, role] of Object.entries(gameInfo.roles)) {
+      if (role !== RoleEnum.CEO) {
         prompt = prompt.replace(
-          `${map[p.role]}：[玩家姓名]`,
-          `${map[p.role]}：${p.name}`
+          `${roleMap[role]}：[玩家姓名]`,
+          `${roleMap[role]}：${playerName}`
         );
-    const overall = Game._buildPreviousExperience(room, 6) || "暂无之前经历";
+      }
+    }
+
+    const overall = this._buildPreviousExperience(6) || "暂无之前经历";
     prompt = prompt.replace("{previous_experience}", overall);
     return new LLM().text(prompt, { temperature: 0.7 }) as unknown as string;
   }
 
-  static calculateGameResult(room: Room) {
-    const state = Game._getState(room.id);
+  async calculateGameResult() {
+    const gameInfo = this.gameInfo;
     const base_score = 50;
     const user_growth = Game._randInt(1000, 100000);
     const revenue = Game._randInt(10000, 1000000);
     const market_share = Game._randInt(1, 25);
     const team_size = Game._randInt(5, 100);
-    const total_actions = Object.values(state.round_actions).reduce(
-      (s, arr) => s + arr.length,
+
+    // 计算总行动次数
+    const total_actions = Object.values(gameInfo.rounds).reduce(
+      (s, roundInfo) => s + Object.keys(roundInfo.player_actions).length,
       0
     );
     const score_bonus = Math.min(total_actions * 2, 50);
     const final_score = base_score + score_bonus;
+
     let success_level = "创业失败";
     if (final_score >= 90) success_level = "独角兽公司";
     else if (final_score >= 75) success_level = "成功上市";
     else if (final_score >= 60) success_level = "盈利稳定";
     else if (final_score >= 45) success_level = "勉强生存";
-    const player_performance = Game._calculatePlayerPerformance(room);
+
+    const player_performance = this._calculatePlayerPerformance();
     const playerScores: Record<string, number> = {};
-    for (const perf of player_performance)
+    for (const perf of player_performance) {
       playerScores[String((perf as any).player)] = Math.min(
         50 + Number((perf as any).contribution_score || 0),
         100
       );
+    }
+
     let final_report = "";
     try {
-      final_report = Game.generateFinalReport(room) as unknown as string;
+      final_report = (await this.generateFinalReport()) as unknown as string;
     } catch {
       final_report = "报告生成失败，请稍后重试。";
     }
+
+    // 更新 GameInfo 的结果
+    gameInfo.result = { report: final_report };
+    gameInfo.state = GameState.FINISHED;
+
     return {
       final_score,
       success_level,
       metrics: { user_growth, revenue, market_share, team_size },
-      achievements: Game._generateAchievements(final_score),
-      timeline: Game._generateTimeline(),
+      achievements: this._generateAchievements(final_score),
+      timeline: this._generateTimeline(),
       player_performance,
       playerScores,
       final_report,
     };
   }
 
-  private static _calculatePlayerPerformance(room: Room) {
-    const state = Game._getState(room.id);
+  private _calculatePlayerPerformance() {
+    const gameInfo = this.gameInfo;
     const perf: Array<Record<string, any>> = [];
-    for (const p of room.players) {
-      const action_count = Object.values(state.round_actions).reduce(
-        (s, arr) =>
-          s +
-          arr.filter((a: any) => a.player === p.name || a.playerName === p.name)
-            .length,
+    for (const p of this.room.players) {
+      // 计算玩家在所有轮次中的行动次数
+      const action_count = Object.values(gameInfo.rounds).reduce(
+        (s, roundInfo) => {
+          return s + (roundInfo.player_actions[p.name] ? 1 : 0);
+        },
         0
       );
       perf.push({
         player: p.name,
-        role: p.role,
+        role: gameInfo.roles[p.name],
         actions_taken: action_count,
         contribution_score: Math.min(action_count * 10, 50),
       });
@@ -474,7 +642,7 @@ export class Game {
     return perf;
   }
 
-  private static _generateAchievements(score: number) {
+  private _generateAchievements(score: number) {
     const a: string[] = [];
     if (score >= 90)
       a.push("🦄 独角兽成就", "💰 十亿美元估值", "🌟 行业领导者");
@@ -486,7 +654,7 @@ export class Game {
     return a;
   }
 
-  private static _generateTimeline() {
+  private _generateTimeline() {
     return [
       { round: 1, event: "产品原型开发完成", impact: "positive" },
       { round: 2, event: "获得首批用户", impact: "positive" },
@@ -500,538 +668,423 @@ export class Game {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  private static _cancelRoundTimeout(room_id: string, round: number) {
-    const key = Game._taskKey(room_id, round);
+  private _cancelRoundTimeout(round: number) {
+    const key = this._taskKey(this.room.id, round);
     const t = Game._round_timeout_tasks.get(key);
     if (t) clearTimeout(t);
     Game._round_timeout_tasks.delete(key);
   }
 
-  private static _startRoundTick(room_id: string) {
-    const existed = Game._round_tick_tasks.get(room_id);
+  private _startRoundTick() {
+    const existed = Game._round_tick_tasks.get(this.room.id);
     if (existed) clearInterval(existed);
     const timer = setInterval(async () => {
       try {
-        const room = Room.get(room_id);
-        if (!room || room.game_state !== GameState.PLAYING)
+        if (!this.room || this.room.state !== RoomState.PLAYING)
           return clearInterval(timer);
-        const state = Game._getState(room_id);
-        if (state.current_phase && typeof state.phase_remain === "number")
-          state.phase_remain = Math.max(state.phase_remain - 1, 0);
-        const current_round = state.current_round;
+        const gameInfo = this.gameInfo;
+        const current_round = gameInfo.current_round;
+        const roundInfo = gameInfo.rounds[current_round];
+
+        // 更新剩余时间
+        if (roundInfo && typeof roundInfo.phase_remain === "number") {
+          roundInfo.phase_remain = Math.max(roundInfo.phase_remain - 1, 0);
+        }
+
         const payload = {
           type: MessageType.ROUND_TICK,
           data: {
             round: current_round,
-            phase: state.current_phase,
-            remaining: state.phase_remain,
-            roundEvent: state.round_events[current_round],
-            privateMessages: state.round_private_messages[current_round],
-            playerActions: state.round_actions[current_round] || [],
-            waitingForPlayers: !Game._allPlayersSubmitted(room, current_round),
-            players: room.players.map((p) => ({
+            phase: "discussion", // 简化阶段概念
+            remaining: roundInfo?.phase_remain || 0,
+            roundEvent: roundInfo,
+            privateMessages: roundInfo?.private_messages || {},
+            playerActions: Object.entries(roundInfo?.player_actions || {}),
+            waitingForPlayers: !this._allPlayersSubmitted(current_round),
+            players: this.room.players.map((p) => ({
               name: p.name,
               is_online: p.is_online,
-              role: p.role || null,
+              role: this.gameInfo.roles[p.name] || null,
               isHost: p.is_host,
             })),
           },
         };
-        if (room) await room.broadcast(payload);
+        if (this.room) await this.room.broadcast(payload);
         if (
-          state.current_phase === "discussion" &&
-          state.phase_remain === 0 &&
-          !Game._allPlayersSubmitted(room, current_round)
+          roundInfo?.phase_remain === 0 &&
+          !this._allPlayersSubmitted(current_round)
         ) {
-          // auto submit for missing players
-          const eventObj = state.round_events[current_round] || ({} as any);
-          const option_keys = Object.keys(
-            eventObj.decision_options || { A: "A", B: "B", C: "C" }
-          );
-          const online = room.get_online_players();
-          const submitted = new Set(
-            (state.round_actions[current_round] || []).map(
-              (a: any) => a.playerName
-            )
-          );
-          for (const p of online) {
-            if (!submitted.has(p.name)) {
-              const choice =
-                option_keys[Math.floor(Math.random() * option_keys.length)] ||
-                "A";
-              await Game.handle_game_action(p.name, {
-                action: choice,
-                reason: "phase_end_auto",
-              });
-            }
-          }
+          await this._autoSubmitMissingPlayers(current_round, "phase_end_auto");
         }
       } catch (e) {
         logger.error("[TICK] error:", (e as any)?.message || e);
         clearInterval(timer);
       }
     }, 1000);
-    Game._round_tick_tasks.set(room_id, timer);
+    Game._round_tick_tasks.set(this.room.id, timer);
   }
 
-  static async handle_startup_idea(player_name: string, idea: string) {
-    const room = Room.get_by_player(player_name);
-    if (!room) return;
-    const player = room.get_player(player_name);
+  /**
+   * 清理房间运行时资源 - 防止内存泄漏
+   * 
+   * 功能说明：
+   * - 清理所有与房间相关的定时器
+   * - 释放轮次计时和超时任务
+   * - 防止房间删除后的内存泄漏
+   * 
+   * 清理范围：
+   * 1. 轮次计时任务（每秒更新）
+   * 2. 轮次超时任务（3分钟超时）
+   * 3. 阶段切换任务（定时切换游戏阶段）
+   * 
+   * 调用时机：
+   * - 房间被删除时
+   * - 游戏异常结束时
+   * - 系统维护清理时
+   * 
+   * 安全性：
+   * - 确保所有计时器都被正确清理
+   * - 避免孤儿定时器继续运行
+   * - 释放Map中的引用，允许垃圾回收
+   */
+  cleanupRoom() {
+    const tick = Game._round_tick_tasks.get(this.room.id);
+    if (tick) clearInterval(tick);
+    Game._round_tick_tasks.delete(this.room.id);
+
+    for (const [key, timeout] of Array.from(
+      Game._round_timeout_tasks.entries()
+    )) {
+      if (key.startsWith(`${this.room.id}:`)) {
+        clearTimeout(timeout);
+        Game._round_timeout_tasks.delete(key);
+      }
+    }
+  }
+
+  /**
+   * 处理玩家创业想法提交
+   * 
+   * 功能说明：
+   * - 记录玩家提交的创业想法
+   * - 广播玩家状态更新
+   * - 检查是否所有玩家都已提交
+   * - 触发想法收集完成流程
+   * 
+   * 业务逻辑：
+   * 1. 验证玩家存在性
+   * 2. 存储想法到gameInfo.ideas
+   * 3. 广播玩家加入消息（包含想法信息）
+   * 4. 检查完成度，触发后续流程
+   * 
+   * 完成触发：
+   * - 所有玩家都提交想法后
+   * - 选择第一个玩家的想法作为主要想法
+   * - 广播IDEAS_COMPLETE消息
+   * 
+   * @param player_name 玩家名称
+   * @param idea 创业想法内容
+   */
+  async handle_startup_idea(player_name: string, idea: string) {
+    const player = this.room.get_player(player_name);
     if (!player) return;
-    player.startup_idea = idea;
-    await room.broadcast({
+    // 将创业想法存储到 GameInfo 中
+    this.gameInfo.ideas[player_name] = idea;
+    await this.room.broadcast({
       type: MessageType.PLAYER_JOIN,
       data: {
         player_name: player_name,
-        players: room.players.map((p) => ({
-          name: p.name,
-          is_online: p.is_online,
-          startup_idea: p.startup_idea,
-          role: p.role || null,
-          isHost: p.is_host,
-        })),
+        players: this.room.getPlayersPayload({
+          includeRole: true,
+          includeIdea: true,
+        }),
       },
     });
-    if (room.all_players_have_ideas()) {
-      room.startup_idea = room.get_online_players()[0]?.startup_idea || null;
-      await room.broadcast({
+    if (this.room.all_players_have_ideas()) {
+      const firstPlayer = this.room.get_online_players()[0];
+      this.gameInfo.selected_idea = firstPlayer ? this.gameInfo.ideas[firstPlayer.name] || "" : "";
+      await this.room.broadcast({
         type: MessageType.IDEAS_COMPLETE,
         data: {
-          startup_idea: room.startup_idea,
-          players: room.players.map((p) => ({
-            name: p.name,
-            is_online: p.is_online,
-            startup_idea: p.startup_idea,
-            role: p.role || null,
-            isHost: p.is_host,
-          })),
+          startup_idea: this.gameInfo.selected_idea,
+          players: this.room.getPlayersPayload({
+            includeRole: true,
+            includeIdea: true,
+          }),
         },
       });
     }
   }
 
-  static async handle_start_game(player_name: string) {
-    const room = Room.get_by_player(player_name);
-    if (!room) return;
-    const room_id = room.id;
-    const player = room.get_player(player_name);
+  async handle_start_game(player_name: string) {
+    const player = this.room.get_player(player_name);
     if (!player || !player.is_host) return;
-    if (room.game_state !== GameState.LOBBY) return;
-    await room.broadcast({
+    if (this.room.state !== RoomState.PREPARE) return;
+    await this.room.broadcast({
       type: MessageType.GAME_LOADING,
       data: { message: "AI正在生成游戏背景，请稍候..." },
     });
-    const ideas = room
-      .get_online_players()
-      .map((p) => p.startup_idea!)
-      .filter(Boolean);
-    const state = Game._getState(room_id);
-    try {
-      state.background = await Game.generateBackgroundFromIdeas(room, ideas);
-    } catch {
-      state.background = "创业团队正在开始他们的创业之旅...";
-    }
-    try {
-      const generated = await Game.generateRolesFromBackground(
-        state.background || ""
-      );
-      const dynamic_roles: Record<string, any> = {};
-      for (const [k, v] of Object.entries(generated)) {
-        dynamic_roles[k] = {
-          name: (v as any).name,
-          description: (v as any).description,
-          actions: (v as any).actions || [],
-        };
-      }
-      state.dynamic_roles = dynamic_roles;
-    } catch {
-      state.dynamic_roles = {} as any;
-    }
-    room.game_state = GameState.ROLE_SELECTION;
-    await room.broadcast({
+    const gameInfo = await this._ensureBackgroundAndRoles();
+    this.room.state = RoomState.PLAYING;
+    await this.room.broadcast({
       type: MessageType.GAME_START,
       data: {
-        startup_idea: room.startup_idea,
-        background: state.background,
-        roles: state.dynamic_roles,
+        startup_idea: this.gameInfo.selected_idea,
+        background: gameInfo.background,
+        roles: gameInfo.roles,
       },
     });
   }
 
-  static async handle_role_selection(player_name: string, role: string) {
-    const room = Room.get_by_player(player_name);
-    if (!room) return;
-    const player = room.get_player(player_name);
+  /**
+   * 处理玩家角色选择
+   * 
+   * 功能说明：
+   * - 验证角色选择的合法性
+   * - 防止重复选择和角色冲突
+   * - 记录角色分配信息
+   * - 检查是否可以开始游戏
+   * 
+   * 验证规则：
+   * 1. 玩家存在性检查
+   * 2. 防止重复选择（已选择过的玩家）
+   * 3. 角色有效性验证（必须是有效的RoleEnum）
+   * 4. 角色唯一性检查（不能被其他玩家占用）
+   * 
+   * 错误处理：
+   * - 发送个人错误消息而非广播
+   * - 保持其他玩家的正常游戏体验
+   * 
+   * 完成检查：
+   * - 所有玩家都选择角色后自动开始游戏
+   * - 生成背景故事和第一轮事件
+   * 
+   * @param player_name 玩家名称
+   * @param role 选择的角色（CEO/CTO/CMO/COO）
+   */
+  async handle_role_selection(player_name: string, role: string) {
+    const player = this.room.get_player(player_name);
     if (!player) return;
-    if (player.role) {
-      await room.send_to_player(player_name, {
+    if (this.gameInfo.roles[player_name]) {
+      await this.room.send_to_player(player_name, {
         type: "role_selection_error",
         data: { message: "你已经选择过角色了" },
       });
       return;
     }
     if (!Object.values(RoleEnum).includes(role as RoleEnum)) {
-      await room.send_to_player(player_name, {
+      await this.room.send_to_player(player_name, {
         type: "role_selection_error",
         data: { message: `无效的角色: ${role}` },
       });
       return;
     }
-    for (const p of room.get_online_players()) {
-      if (p.name !== player_name && p.role === (role as RoleEnum)) {
-        await room.send_to_player(player_name, {
+    for (const p of this.room.players) {
+      if (p.name !== player_name && this.gameInfo.roles[p.name] === (role as RoleEnum)) {
+        await this.room.send_to_player(player_name, {
           type: "role_selection_error",
           data: { message: `角色 ${role} 已被其他玩家选择，请选择其他角色` },
         });
         return;
       }
     }
-    player.role = role as RoleEnum;
-    await room.broadcast({
+    // 将角色存储到 GameInfo 中
+    this.gameInfo.roles[player_name] = role as RoleEnum;
+    await this.room.broadcast({
       type: MessageType.ROLE_SELECTED,
       data: {
-        selectedRoles: room.get_selected_roles(),
-        players: room.players.map((p) => ({
-          name: p.name,
-          is_online: p.is_online,
-          role: p.role || null,
-          startup_idea: p.startup_idea,
-          isHost: p.is_host,
-        })),
+        selectedRoles: this.room.get_selected_roles(),
+        players: this.room.getPlayersPayload(),
       },
     });
-    if (room.all_players_have_roles()) {
-      await Game._auto_start_game_after_role_selection(room.id);
+    if (this.room.all_players_have_roles()) {
+      await this._auto_start_game_after_role_selection();
     }
   }
 
-  private static async _auto_start_game_after_role_selection(room_id: string) {
-    const room = Room.get(room_id);
-    if (!room) return;
-    const state = Game._getState(room_id);
-    room.game_state = GameState.LOADING;
-    await room.broadcast({
+  private async _auto_start_game_after_role_selection() {
+    this.room.state = RoomState.PLAYING;
+    await this.room.broadcast({
       type: MessageType.GAME_LOADING,
       data: { message: "AI正在生成游戏背景和角色介绍，请稍候..." },
     });
-    if (!state.background) {
-      const ideas = room
-        .get_online_players()
-        .map((p) => p.startup_idea!)
-        .filter(Boolean);
-      try {
-        state.background = await Game.generateBackgroundFromIdeas(room, ideas);
-      } catch {
-        state.background = "创业团队正在开始他们的创业之旅...";
-      }
-    }
-    if (!state.dynamic_roles) {
-      try {
-        const generated = await Game.generateRolesFromBackground(
-          state.background || ""
-        );
-        const dynamic_roles: Record<string, any> = {};
-        for (const [k, v] of Object.entries(generated))
-          dynamic_roles[k] = {
-            name: (v as any).name,
-            description: (v as any).description,
-            actions: (v as any).actions || [],
-          };
-        state.dynamic_roles = dynamic_roles;
-      } catch {
-        state.dynamic_roles = {} as any;
-      }
-    }
-    await room.broadcast({
+    await this._ensureBackgroundAndRoles();
+    await this.room.broadcast({
       type: MessageType.GAME_START,
       data: {
-        startup_idea: room.startup_idea,
-        background: state.background,
-        roles: state.dynamic_roles,
+        startup_idea: this.gameInfo.selected_idea,
+        background: this.gameInfo.background,
+        roles: this.gameInfo.roles,
       },
     });
-    state.current_round = 1;
-    await room.broadcast({
+    this.gameInfo.current_round = 1;
+    await this.room.broadcast({
       type: MessageType.ROUND_LOADING,
       data: { round: 1, message: "AI正在生成第1轮事件，请稍候..." },
     });
-    const event = await Game.generateEvent(room, 1);
-    state.round_events[1] = event.event;
-    state.round_private_messages[1] = event.private_messages;
-    if (event.situation) state.round_situation[1] = event.situation;
-    room.game_state = GameState.PLAYING;
-    await room.broadcast({
+    const event = await this._prepareRoundData(1);
+    this.room.state = RoomState.PLAYING;
+    const roundInfo = this.gameInfo.rounds[1];
+    await this.room.broadcast({
       type: MessageType.GAME_STARTED,
       data: {
         round: 1,
-        roundEvent: state.round_events[1],
-        privateMessages: state.round_private_messages[1],
+        roundEvent: roundInfo,
+        privateMessages: roundInfo?.private_messages || {},
         isDefaultEvent: !!event.is_default_event,
       },
     });
-    // phases
-    Game._setPhase(room, "event_display", 180);
-    await room.broadcast({
+    await this.room.broadcast({
       type: MessageType.ROUND_PHASE,
       data: { phase: "event_display", round: 1 },
     });
-    setTimeout(async () => {
-      const r = Room.get(room_id);
-      if (!r) return;
-      const s = Game._getState(room_id);
-      if (s.current_round !== 1 || r.game_state !== GameState.PLAYING) return;
-      if (s.current_phase !== "event_display") return;
-      Game._setPhase(r, "info_and_options", s.phase_remain);
-      await r.broadcast({
-        type: MessageType.ROUND_PHASE,
-        data: { phase: "info_and_options", round: 1 },
-      });
-    }, 10000);
-    setTimeout(async () => {
-      const r = Room.get(room_id);
-      if (!r) return;
-      const s = Game._getState(room_id);
-      if (s.current_round !== 1 || r.game_state !== GameState.PLAYING) return;
-      if (s.current_phase !== "info_and_options") return;
-      Game._setPhase(r, "discussion", s.phase_remain);
-      await r.broadcast({
-        type: MessageType.ROUND_PHASE,
-        data: { phase: "discussion", round: 1 },
-      });
-    }, 30000);
-    Game._startRoundTick(room_id);
+    this._schedulePhaseTransitions(1);
     // timeout auto submit
-    const key = Game._taskKey(room_id, 1);
-    Game._cancelRoundTimeout(room_id, 1);
+    const key = this._taskKey(this.room.id, 1);
+    this._cancelRoundTimeout(1);
     Game._round_timeout_tasks.set(
       key,
       setTimeout(
-        () =>
-          Game._auto_submit_after_timeout(
-            room_id,
-            1,
-            Game.ROUND_ACTION_TIMEOUT_SECONDS
-          ),
+        () => this._auto_submit_after_timeout(1),
         Game.ROUND_ACTION_TIMEOUT_SECONDS * 1000
       )
     );
   }
 
-  static async handle_game_action(player_name: string, action_data: any) {
-    const room = Room.get_by_player(player_name);
-    if (!room || room.game_state !== GameState.PLAYING) return;
-    const state = Game._getState(room.id);
-    const action = {
-      playerName: player_name,
-      actionType: "decision",
-      action: action_data?.action,
-      round: state.current_round,
-      role: room.get_player(player_name)?.role,
-      reason: action_data?.reason,
-      timestamp: new Date().toISOString(),
-    };
-    Game._addRoundAction(room, state.current_round, action);
-    await room.broadcast({
+  /**
+   * 处理游戏内玩家行动
+   * 
+   * 功能说明：
+   * - 记录玩家在当前轮次的决策选择
+   * - 实时广播行动提交状态
+   * - 检查是否所有玩家都已提交
+   * - 触发轮次完成或下一轮开始
+   * 
+   * 处理流程：
+   * 1. 验证玩家和房间状态
+   * 2. 记录行动到当前轮次数据
+   * 3. 广播ACTION_SUBMITTED消息
+   * 4. 检查提交完成度
+   * 5. 触发轮次完成处理
+   * 
+   * 状态检查：
+   * - 玩家必须存在且在线
+   * - 房间状态必须是PLAYING
+   * - 自动取消轮次超时任务
+   * 
+   * 完成处理：
+   * - 所有玩家提交后立即处理轮次完成
+   * - 进入下一轮或游戏结束流程
+   * 
+   * @param player_name 玩家名称
+   * @param action_data 行动数据，包含action字段
+   */
+  async handle_game_action(player_name: string, action_data: any) {
+    const player = this.room.get_player(player_name);
+    if (!player || this.room.state !== RoomState.PLAYING) return;
+    const gameInfo = this.gameInfo;
+    const current_round = gameInfo.current_round;
+
+    // 直接记录玩家行动到 RoundInfo
+    this._addRoundAction(current_round, player_name, action_data?.action);
+
+    await this.room.broadcast({
       type: MessageType.ACTION_SUBMITTED,
       data: {
-        playerActions: state.round_actions[state.current_round] || [],
-        waitingForPlayers: !Game._allPlayersSubmitted(
-          room,
-          state.current_round
+        playerActions: Object.entries(
+          gameInfo.rounds[current_round]?.player_actions || {}
         ),
+        waitingForPlayers: !this._allPlayersSubmitted(current_round),
       },
     });
-    if (Game._allPlayersSubmitted(room, state.current_round)) {
-      Game._cancelRoundTimeout(room.id, state.current_round);
-      await Game._handle_round_complete(room.id, room);
+
+    if (this._allPlayersSubmitted(current_round)) {
+      this._cancelRoundTimeout(current_round);
+      await this._handle_round_complete();
     }
   }
 
-  private static async _handle_round_complete(room_id: string, room: Room) {
-    const state = Game._getState(room_id);
-    if (state.current_round >= 5)
-      await Game._handle_game_complete(room_id, room);
-    else await Game._start_next_round(room_id, room);
+  private async _handle_round_complete() {
+    const gameInfo = this.gameInfo;
+    if (gameInfo.current_round >= 5) await this._handle_game_complete();
+    else await this._start_next_round();
   }
 
-  private static async _handle_game_complete(room_id: string, room: Room) {
-    const state = Game._getState(room_id);
-    room.game_state = GameState.LOADING;
-    await room.broadcast({
-      type: MessageType.GAME_LOADING,
-      data: { message: "AI正在分析游戏结果，请稍候..." },
+  private async _handle_game_complete() {
+    try {
+      const result = await this.calculateGameResult();
+      this.room.state = RoomState.PREPARE;
+      await this.room.broadcast({
+        type: MessageType.GAME_COMPLETE,
+        data: result,
+      });
+    } finally {
+      this.cleanupRoom();
+    }
+  }
+
+  private async _start_next_round() {
+    const gameInfo = this.gameInfo;
+    const next = gameInfo.current_round + 1;
+    await this.room.broadcast({
+      type: MessageType.ROUND_LOADING,
+      data: { round: next, message: `AI正在生成第${next}轮事件，请稍候...` },
     });
     try {
-      if (
-        state.current_round >= 1 &&
-        !state.round_situation[state.current_round]
-      )
-        await Game.generateRoundAnalysis(room, state.current_round + 1);
+      await this.generateRoundAnalysis(next);
     } catch {}
-    room.game_state = GameState.FINISHED;
-    state.game_result = Game.calculateGameResult(room);
-    await room.broadcast({
-      type: MessageType.GAME_COMPLETE,
-      data: { result: state.game_result },
-    });
-  }
-
-  private static async _start_next_round(room_id: string, room: Room) {
-    const state = Game._getState(room_id);
-    state.current_round += 1;
-    room.game_state = GameState.LOADING;
-    await room.broadcast({
-      type: MessageType.ROUND_LOADING,
-      data: {
-        round: state.current_round,
-        message: `AI正在生成第${state.current_round}轮事件，请稍候...`,
-      },
-    });
-    if (state.current_round > 1) {
-      try {
-        await Game.generateRoundAnalysis(room, state.current_round);
-      } catch {}
-    }
-    const event = await Game.generateEvent(room, state.current_round);
-    state.round_events[state.current_round] = event.event;
-    state.round_private_messages[state.current_round] = event.private_messages;
-    if (event.situation)
-      state.round_situation[state.current_round] = event.situation;
-    room.game_state = GameState.PLAYING;
-    await room.broadcast({
+    const event = await this._prepareRoundData(next);
+    gameInfo.current_round = next;
+    const roundInfo = gameInfo.rounds[next];
+    await this.room.broadcast({
       type: MessageType.ROUND_START,
       data: {
-        round: state.current_round,
-        roundInfo: Game._getRoundInfo(room, state.current_round),
-        roundEvent: state.round_events[state.current_round],
-        privateMessages: state.round_private_messages[state.current_round],
+        round: next,
+        roundEvent: roundInfo,
+        privateMessages: roundInfo?.private_messages || {},
         isDefaultEvent: !!event.is_default_event,
       },
     });
-    // phases
-    Game._setPhase(room, "event_display", 180);
-    await room.broadcast({
+    await this.room.broadcast({
       type: MessageType.ROUND_PHASE,
-      data: { phase: "event_display", round: state.current_round },
+      data: { phase: "event_display", round: next },
     });
-    setTimeout(async () => {
-      const r = Room.get(room_id);
-      if (!r) return;
-      const s = Game._getState(room_id);
-      if (
-        s.current_round !== state.current_round ||
-        r.game_state !== GameState.PLAYING
-      )
-        return;
-      if (s.current_phase !== "event_display") return;
-      Game._setPhase(r, "info_and_options", s.phase_remain);
-      await room.broadcast({
-        type: MessageType.ROUND_PHASE,
-        data: { phase: "info_and_options", round: s.current_round },
-      });
-    }, 10000);
-    setTimeout(async () => {
-      const r = Room.get(room_id);
-      if (!r) return;
-      const s = Game._getState(room_id);
-      if (
-        s.current_round !== state.current_round ||
-        r.game_state !== GameState.PLAYING
-      )
-        return;
-      if (s.current_phase !== "info_and_options") return;
-      Game._setPhase(r, "discussion", s.phase_remain);
-      await room.broadcast({
-        type: MessageType.ROUND_PHASE,
-        data: { phase: "discussion", round: s.current_round },
-      });
-    }, 30000);
-    Game._startRoundTick(room_id);
-    const key = Game._taskKey(room_id, state.current_round);
-    Game._cancelRoundTimeout(room_id, state.current_round);
+    this._schedulePhaseTransitions(next);
+    const key = this._taskKey(this.room.id, next);
+    this._cancelRoundTimeout(next);
     Game._round_timeout_tasks.set(
       key,
       setTimeout(
-        () =>
-          Game._auto_submit_after_timeout(
-            room_id,
-            state.current_round,
-            Game.ROUND_ACTION_TIMEOUT_SECONDS
-          ),
+        () => this._auto_submit_after_timeout(next),
         Game.ROUND_ACTION_TIMEOUT_SECONDS * 1000
       )
     );
   }
 
-  static async handle_restart_game(player_name: string) {
-    const room = Room.get_by_player(player_name);
-    if (!room) return;
-    const player = room.get_player(player_name);
+  async handle_restart_game(player_name: string) {
+    const player = this.room.get_player(player_name);
     if (!player || !player.is_host) return;
-    const state = Game._getState(room.id);
-    room.game_state = GameState.LOBBY;
-    state.current_round = 1;
-    state.background = "";
-    state.dynamic_roles = null;
-    state.game_result = null;
-    state.round_actions = {};
-    state.round_events = {};
-    state.round_private_messages = {};
-    state.dynamic_round_info = {};
-    state.round_situation = {};
-    state.current_phase = null;
-    state.phase_remain = 180;
-    for (const p of room.players) {
-      p.role = null as any;
-      p.actions = [];
-    }
-    await room.broadcast({
+    this.cleanupRoom();
+    this.gameInfo = createDefaultGameInfo();
+    this.gameInfo.selected_idea = "";
+    this.room.state = RoomState.PREPARE;
+    await this.room.broadcast({
       type: MessageType.GAME_RESTART,
       data: {
-        players: room.players.map((p) => ({
-          name: p.name,
-          is_online: p.is_online,
-          role: p.role || null,
-          startup_idea: p.startup_idea,
-          isHost: p.is_host,
-        })),
+        players: this.room.getPlayersPayload({
+          includeRole: true,
+          includeIdea: true,
+        }),
       },
     });
   }
 
-  private static async _auto_submit_after_timeout(
-    room_id: string,
-    round_num: number,
-    timeout_seconds: number
-  ) {
-    await timeout(timeout_seconds * 1000);
-    const room = Room.get(room_id);
-    if (!room) return;
-    const state = Game._getState(room_id);
-    if (
-      state.current_round !== round_num ||
-      room.game_state !== GameState.PLAYING
-    )
-      return;
-    if (Game._allPlayersSubmitted(room, round_num)) return;
-    const ev = state.round_events[round_num] || ({} as any);
-    const option_keys = Object.keys(
-      ev.decision_options || { A: "A", B: "B", C: "C" }
-    );
-    const online = room.get_online_players();
-    const submitted = new Set(
-      (state.round_actions[round_num] || []).map((a: any) => a.playerName)
-    );
-    for (const p of online) {
-      if (!submitted.has(p.name)) {
-        const choice =
-          option_keys[Math.floor(Math.random() * option_keys.length)] || "A";
-        await Game.handle_game_action(p.name, {
-          action: choice,
-          reason: "timeout_auto",
-        });
-      }
+  private async _auto_submit_after_timeout(round_num: number) {
+    try {
+      if (this.room.state !== RoomState.PLAYING) return;
+      await this._autoSubmitMissingPlayers(round_num, "round_timeout_auto");
+    } finally {
+      await this._handle_round_complete();
     }
   }
 }

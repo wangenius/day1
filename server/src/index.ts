@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 import { Player } from "./Player.js";
 import { Room } from "./Room.js";
+import { logger } from "./utils/logger.js";
 
 config();
 
@@ -22,34 +23,28 @@ app.get("/", (_req, res) => {
  */
 app.post("/rooms/join", (req, res) => {
   try {
-    const { room_id, player_name } = req.body;
+    const { room_id, player_id } = req.body;
     const existing = Room.get(room_id);
     if (existing) {
-      try {
-        Room.join(player_name, room_id);
-      } catch (e: any) {
-        return res.json({
-          room_id,
-          success: false,
-          message: e?.message || "房间加入失败",
-        });
-      }
+      Room.join(player_id, room_id);
     } else {
-      try {
-        Room.create(room_id);
-      } catch (e: any) {
-        return res.json({
-          room_id,
-          success: false,
-          message: e?.message || "创建房间失败",
-        });
-      }
-      Room.join(player_name, room_id);
+      Room.create(room_id);
+      Room.join(player_id, room_id);
     }
+    logger.info(`玩家 ${player_id} 加入房间 ${room_id}`);
     return res.json({ room_id, success: true });
   } catch (e: any) {
     res.status(500).json({ error: e?.message || String(e) });
   }
+});
+
+// 房间重连
+app.post("/rooms/reconnect", (req, res) => {
+  const { player_name } = req.body;
+  const room = Room.get_by_player(player_name);
+  if (!room) return res.json({ room_id: null, success: false });
+  logger.info(`房间 ${room.id} 状态: ${room.state}`);
+  return res.json({ room_id: room.id, success: true });
 });
 
 // 获取房间列表
@@ -75,21 +70,7 @@ app.get("/rooms", (_req, res) => {
   }
 });
 
-// 获取房间状态
-app.get("/rooms/:room_id/status", (req, res) => {
-  const { room_id } = req.params;
-  const room = Room.get(room_id);
-  if (!room) return res.status(404).json({ error: "房间不存在" });
-  return res.json({
-    exists: true,
-    room_id,
-    player_count: room.get_online_players().length,
-    room_state: room.state,
-  });
-});
-
 const server = createServer(app);
-
 const wss = new WebSocketServer({ server, path: "/ws" });
 
 // 前端连接处理
