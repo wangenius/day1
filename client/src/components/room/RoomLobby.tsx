@@ -2,18 +2,19 @@ import { useGame } from "../../context/GameContext";
 import { Button } from "../Button";
 
 export function RoomLobby() {
-  const { players, currentRoom, playerName, handleRoomAction, handleExitRoom } =
-    useGame();
+  const { room, gameState } = useGame();
 
   // 获取当前玩家信息
-  const currentPlayer = players.find((p) => p.name === playerName);
+  const currentPlayer = room.room?.players.find((p) => p.name === room.player);
   const isHost = currentPlayer?.is_host || false;
 
   return (
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col justify-center p-6 relative">
       {/* 退出房间按钮 */}
       <button
-        onClick={handleExitRoom}
+        onClick={() => {
+          room.leave();
+        }}
         className="absolute top-4 left-4 flex items-center gap-2 text-white/70 hover:text-white transition-colors duration-200 text-sm font-normal font-['Cactus_Classical_Serif']"
       >
         <svg
@@ -46,21 +47,21 @@ export function RoomLobby() {
               房间号
             </div>
             <div className="text-white text-2xl font-medium font-['Space_Grotesk']">
-              {currentRoom}
+              {room.room?.id}
             </div>
           </div>
 
           {/* 玩家列表 */}
           <div className="mb-6">
             <div className="text-white/70 text-sm font-normal font-['Cactus_Classical_Serif'] mb-3">
-              在线玩家 ({players.length}/4)
+              在线玩家 ({room.room?.players.length}/4)
             </div>
             <div className="space-y-2">
-              {players.map((player, index) => (
+              {room.room?.players.map((player, index) => (
                 <div
                   key={index}
                   className={`flex items-center justify-between p-3 rounded-lg border ${
-                    player.name === playerName
+                    player.name === room.player
                       ? "bg-white/10 border-white/30"
                       : "bg-white/5 border-white/10"
                   }`}
@@ -80,7 +81,7 @@ export function RoomLobby() {
                       </span>
                     )}
                   </div>
-                  {player.name === playerName && (
+                  {player.name === room.player && (
                     <span className="text-white/60 text-xs">(你)</span>
                   )}
                 </div>
@@ -93,7 +94,7 @@ export function RoomLobby() {
             {isHost ? (
               <Button
                 onClick={() => {
-                  handleRoomAction("start_game", currentRoom);
+                  // gameState.start();
                 }}
               >
                 开始游戏

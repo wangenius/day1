@@ -7,9 +7,8 @@ import { useGame } from "../../context/GameContext";
  * 用户输入创业想法的页面
  */
 function IdeaPickerInRoom() {
-  const { handleStartupIdeaSubmit, handleExitRoom, currentRoom, players } =
-    useGame();
-  const handleSubmit = handleStartupIdeaSubmit;
+  const { room, gameState } = useGame();
+  const handleSubmit = gameState.handleStartupIdeaSubmit;
   const [startupIdea, setStartupIdea] = useState<string>("");
   const [ideaSubmitted, setIdeaSubmitted] = useState<boolean>(false);
 
@@ -55,7 +54,7 @@ function IdeaPickerInRoom() {
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col justify-center p-6 relative">
       {/* 退出房间按钮 */}
       <button
-        onClick={handleExitRoom}
+        onClick={gameState.handleExitRoom}
         className="absolute top-4 left-4 flex items-center gap-2 text-white/70 hover:text-white transition-colors duration-200 text-sm font-normal font-['Cactus_Classical_Serif']"
         disabled={ideaSubmitted}
       >
@@ -80,14 +79,14 @@ function IdeaPickerInRoom() {
       <div className="absolute top-4 right-4 text-right">
         {/* 房间号 */}
         <div className="text-white/70 text-sm font-normal font-['Cactus_Classical_Serif'] mb-2">
-          房间号: <span className="text-white">{currentRoom}</span>
+          房间号: <span className="text-white">{room.room?.id}</span>
         </div>
 
         {/* 玩家列表 */}
         <div className="text-white/70 text-sm font-normal font-['Cactus_Classical_Serif']">
-          <div className="mb-1">在线玩家 ({players.length}):</div>
+          <div className="mb-1">在线玩家 ({room.room?.players.length}):</div>
           <div className="space-y-1">
-            {players.map((player, index) => (
+            {room.room?.players.map((player, index) => (
               <div key={index} className="flex items-center justify-end gap-2">
                 <span className="text-white">{player.name}</span>
                 <div className="flex items-center gap-1">

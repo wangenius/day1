@@ -32,16 +32,16 @@ interface RoleInfo {
  * 显示玩家角色信息和过渡动画
  */
 function GameLoadingPage() {
-  const { playerName, roleDefinitions, players } = useGame();
+  const { room, gameState } = useGame();
   const [currentView, setCurrentView] = useState<CurrentView>("loading");
 
   // 添加调试日志
-  console.log("GameLoadingPage - playerName:", playerName);
-  console.log("GameLoadingPage - roleDefinitions:", roleDefinitions);
-  console.log("GameLoadingPage - players:", players);
+  console.log("GameLoadingPage - playerName:", room.player);
+  console.log("GameLoadingPage - roleDefinitions:", gameState.roleDefinitions);
+  console.log("GameLoadingPage - players:", room.room?.players);
   console.log(
     "GameLoadingPage - players详细:",
-    JSON.stringify(players, null, 2)
+    JSON.stringify(room.room?.players, null, 2)
   );
 
   /**
@@ -49,25 +49,24 @@ function GameLoadingPage() {
    * @returns 角色信息或null
    */
   const getCurrentPlayerRole = (): RoleInfo | null => {
-    if (!playerName) return null;
+    if (!room.player) return null;
 
     // 从players数组中找到当前玩家
-    const currentPlayer = players.find(
-      (player: Player) => player.name === playerName
+    const currentPlayer = room.room?.players.find(
+      (player: Player) => player.name === room.player
     );
-    if (!currentPlayer || !currentPlayer.role) return null;
+    if (!currentPlayer || !currentPlayer.name) return null;
 
     // 根据玩家选择的角色ID获取角色信息
-    const roleId = currentPlayer.role;
+    const roleId = currentPlayer.name;
     console.log("当前玩家角色ID:", roleId);
-    console.log("角色定义:", roleDefinitions);
 
     // 若有角色定义，优先返回定义内容；否则使用基础回退信息
-    if (roleDefinitions && roleDefinitions[roleId]) {
+    if (gameState.roleDefinitions && gameState.roleDefinitions[roleId]) {
       return {
         id: roleId,
-        name: roleDefinitions[roleId].name || roleId,
-        description: roleDefinitions[roleId].description || "",
+        name: gameState.roleDefinitions?.[roleId].name || roleId,
+        description: gameState.roleDefinitions?.[roleId].description || "",
       };
     }
 
@@ -80,7 +79,7 @@ function GameLoadingPage() {
   };
 
   const currentRole = getCurrentPlayerRole();
-  const roleName = currentRole ? currentRole.name : playerName;
+  const roleName = currentRole ? currentRole.name : room.player;
 
   // 添加调试日志
   console.log("GameLoadingPage - currentRole:", currentRole);

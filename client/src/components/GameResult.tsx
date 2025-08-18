@@ -24,11 +24,11 @@ interface PrinterEffectProps {
  * 显示游戏结束后的结果和打印效果
  */
 function GameResult() {
-  const { gameResult, handleRestartGame } = useGame();
+  const { gameState } = useGame();
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [printProgress, setPrintProgress] = useState<number>(0);
 
-  console.log(gameResult);
+  console.log(gameState.gameResult);
 
   useEffect(() => {
     // 5秒后开始打印动画
@@ -69,7 +69,7 @@ function GameResult() {
   const handleRestart = (): void => {
     setIsPrinting(false);
     setPrintProgress(0);
-    handleRestartGame();
+    gameState.handleRestartGame();
   };
 
   return (
@@ -79,7 +79,7 @@ function GameResult() {
         printProgress={printProgress}
         onStartPrint={handleStartPrint}
         onRestart={handleRestart}
-        gameResult={gameResult}
+        gameResult={gameState.gameResult}
       />
     </div>
   );

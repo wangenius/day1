@@ -156,14 +156,14 @@ function RoundResult({
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center">
                       <span className="text-2xl mr-3">
-                        {getRoleIcon(player?.role)}
+                        {getRoleIcon(player?.name)}
                       </span>
                       <div>
                         <div className="font-medium text-gray-800">
                           {action.playerName}
                         </div>
                         <div className="text-sm text-gray-600">
-                          {player?.role?.toUpperCase()}
+                          {player?.name?.toUpperCase()}
                         </div>
                       </div>
                     </div>
@@ -230,7 +230,7 @@ function RoundResult({
         <div className="text-center">
           {roundNumber < 5 ? (
             <div>
-              {players?.find(p => p.name === playerName)?.isHost ? (
+              {players?.find(p => p.name === playerName)?.is_host ? (
                 <button
                   onClick={onContinueToNextRound}
                   className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium text-lg"

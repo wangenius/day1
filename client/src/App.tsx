@@ -16,7 +16,7 @@ function App() {
   const { gameState } = useGame();
 
   const renderCurrentState = () => {
-    switch (gameState) {
+    switch (gameState.gameState) {
       case GAME_UX_PAGEING.INITIAL:
         return <InitialPage />;
       case GAME_UX_PAGEING.USERNAME:

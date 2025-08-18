@@ -36,10 +36,9 @@ export interface UseRoomReturn {
   join: (roomId: string) => Promise<void>;
   /**
    * 处理房间相关操作（创建或加入房间）的异步方法
-   * @param roomId - 目标房间的唯一标识符
    * @returns Promise<void> - 异步操作Promise
    */
-  leave: (roomId: string) => Promise<void>;
+  leave: () => Promise<void>;
   /**
    * 重新连接到房间
    * @param player - 玩家名称
@@ -169,40 +168,37 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
     [httpBaseUrl, playerName]
   );
 
-  const leave = useCallback(
-    async (roomId: string): Promise<void> => {
-      try {
-        const apiUrl = `${httpBaseUrl}/rooms/leave`;
-        const requestBody = {
-          room_id: roomId,
-          player_id: playerName,
-        };
+  const leave = useCallback(async (): Promise<void> => {
+    try {
+      const apiUrl = `${httpBaseUrl}/rooms/leave`;
+      const requestBody = {
+        room_id: room?.id,
+        player_id: playerName,
+      };
 
-        const requestConfig = {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
-        };
+      const requestConfig = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      };
 
-        const response = await fetch(apiUrl, requestConfig);
+      const response = await fetch(apiUrl, requestConfig);
 
-        const data = (await response.json()) as {
-          success: boolean;
-          message?: string;
-        };
+      const data = (await response.json()) as {
+        success: boolean;
+        message?: string;
+      };
 
-        if (data.success) {
-          return;
-        } else {
-          const errorMessage = data.message || "离开房间失败";
-          throw new Error(errorMessage);
-        }
-      } catch (error) {
-        throw error;
+      if (data.success) {
+        return;
+      } else {
+        const errorMessage = data.message || "离开房间失败";
+        throw new Error(errorMessage);
       }
-    },
-    [httpBaseUrl, playerName]
-  );
+    } catch (error) {
+      throw error;
+    }
+  }, [httpBaseUrl, playerName]);
 
   /**
    * 重新连接到房间

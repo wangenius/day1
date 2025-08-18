@@ -6,8 +6,23 @@ import {
   type PlayerAction,
   type RoleDefinition,
   type RoundEvent,
+  type Player,
+  type RoomInfo,
 } from "../../const/const";
+import type { UseRoomReturn } from "./useRoom";
+import type { UseWebSocketReturn } from "./useWebSocket";
 
+/**
+ * 游戏状态 Hook 参数接口
+ */
+export interface UseGameStateParams {
+  /** 房间管理对象 */
+  room: UseRoomReturn;
+  /** WebSocket 管理对象 */
+  webSocket: UseWebSocketReturn;
+  /** HTTP 基础 URL */
+  httpBaseUrl: string;
+}
 
 /**
  * 游戏状态 Hook 返回值接口
@@ -87,6 +102,23 @@ export interface UseGameStateReturn {
 
   /** 重置所有游戏相关状态到初始值 */
   resetGameState: () => void;
+
+  // ========== 事件处理函数 ==========
+  handleInitialPageClick: () => void;
+  handlePlayerNameSet: (name: string) => void;
+  handleRoomActionWithConnection: (action: string, roomId: string) => Promise<void>;
+  handleStartupIdeaSubmit: (idea: string) => void;
+  handleRoleSelect: (roleId: string) => void;
+  handleActionSubmit: (action: PlayerAction) => void;
+  handleStartRound: () => void;
+  handleLoadingComplete: () => void;
+  handleRestartGame: () => void;
+  handleExitRoom: () => Promise<void>;
+  goToSelection: () => void;
+  goToInfoAndOptions: () => void;
+  goToDiscussion: () => void;
+  selectAction: (actionKey: string) => void;
+  submitSelectedAction: () => void;
 }
 
 /**
@@ -108,25 +140,28 @@ export interface UseGameStateReturn {
  * - 包含工具函数，处理数据转换和持久化
  * - 状态分类清晰，便于理解和维护
  *
+ * @param params - Hook所需的参数对象
  * @returns 返回所有状态数据和操作方法的对象
  *
  * @example
  * ```tsx
- * const gameState = useGameState();
+ * const gameState = useGameState(params);
  *
  * // 使用状态
- * const { playerName, currentRoom, gameState: currentState } = gameState;
+ * const { currentRound, roundEvent, gameState: currentState } = gameState;
  *
  * // 更新状态
- * gameState.setPlayerName('NewPlayer');
- * gameState.setGameState(GAME_STATES.PLAYING);
- *
- * // 使用工具函数
- * gameState.addMessage('游戏开始了！');
- * gameState.saveGameState('player1', 'room123', GAME_STATES.LOBBY);
+ * gameState.setCurrentRound(2);
+ * gameState.setGameState(GAME_UX_PAGEING.PLAYING);
  * ```
  */
-export function useGameState(): UseGameStateReturn {
+export function useGameState(params: UseGameStateParams): UseGameStateReturn {
+  const {
+    room,
+    webSocket,
+    httpBaseUrl,
+  } = params;
+
   // ==================== 基础状态 ====================
   /** 当前游戏状态 */
   const [gameState, setGameState] = useState<GameState>(
@@ -212,10 +247,9 @@ export function useGameState(): UseGameStateReturn {
    */
   const handlePlayerNameSet = useCallback(
     (name: string): void => {
-      setPlayerName(name);
       setGameState(GAME_UX_PAGEING.ROOM_SELECTION);
     },
-    [setPlayerName, setGameState]
+    [setGameState]
   );
 
   /**
@@ -232,15 +266,15 @@ export function useGameState(): UseGameStateReturn {
 
         // 步骤1: 先执行HTTP API调用加入房间
         console.log(`🏠 步骤1: 调用API加入房间`);
-        await handleRoomAction(action, roomId);
+        await room.join(roomId);
         console.log(`🏠 步骤1: API调用成功，房间加入完成`);
 
         // 步骤2: API成功后建立WebSocket实时连接
         console.log(`🏠 步骤2: 开始建立WebSocket连接`);
         console.log(
-          `🏠 步骤2: 连接参数 - 玩家: ${playerName}, 房间: ${roomId}`
+          `🏠 步骤2: 连接参数 - 玩家: ${room.player}, 房间: ${roomId}`
         );
-        connectWebSocket(playerName, roomId);
+        webSocket.connect(room.player, roomId);
         console.log(`🏠 步骤2: WebSocket连接建立请求已发送`);
 
         console.log(`🏠 完成: 房间操作流程完成，等待WebSocket连接确认`);
@@ -251,7 +285,7 @@ export function useGameState(): UseGameStateReturn {
         // 不重新抛出错误，因为用户已经收到错误提示
       }
     },
-    [handleRoomAction, connectWebSocket, playerName]
+    [room, webSocket]
   );
 
   /**
@@ -260,16 +294,14 @@ export function useGameState(): UseGameStateReturn {
    */
   const handleStartupIdeaSubmit = useCallback(
     (idea: string): void => {
-      if (wsRef.current && wsConnected) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: "startup_idea",
-            data: { idea },
-          })
-        );
+      if (webSocket.connected) {
+        webSocket.send({
+          type: "startup_idea",
+          data: { idea },
+        });
       }
     },
-    [wsRef, wsConnected]
+    [webSocket]
   );
 
   /**
@@ -277,61 +309,48 @@ export function useGameState(): UseGameStateReturn {
    * @param roleId - 选择的角色ID
    */
   const handleRoleSelect = useCallback(
-    (roleId: string): void => {
-      console.log(`🎭 步骤开始: 处理角色选择，角色ID: ${roleId}`);
-      console.log(`🎭 步骤开始: WebSocket连接状态: ${wsConnected}`);
+          (roleId: string): void => {
+        console.log(`🎭 步骤开始: 处理角色选择，角色ID: ${roleId}`);
+        console.log(`🎭 步骤开始: WebSocket连接状态: ${webSocket.connected}`);
 
-      // 步骤1: 立即更新本地玩家状态，提供即时UI反馈
-      console.log(`🎭 步骤1: 开始更新本地玩家状态`);
-      console.log(`🎭 步骤1: 当前玩家: ${playerName}, 选择角色: ${roleId}`);
-      setPlayers((prevPlayers: Player[]) => {
-        const updatedPlayers = prevPlayers.map((player: Player) =>
-          player.name === playerName ? { ...player, role: roleId } : player
-        );
-        console.log(`🎭 步骤1: 玩家状态更新完成`, updatedPlayers);
-        return updatedPlayers;
-      });
-
-      // 步骤2: 更新全局已选择的角色列表
-      console.log(`🎭 步骤2: 开始更新已选择角色列表`);
-      setSelectedRoles((prevRoles: string[]) => {
-        const newRoles = [...prevRoles, roleId];
-        console.log(`🎭 步骤2: 已选择角色列表更新:`, {
-          previous: prevRoles,
-          new: newRoles,
-          added: roleId,
+        // 步骤1: 更新全局已选择的角色列表
+        console.log(`🎭 步骤1: 开始更新已选择角色列表`);
+        setSelectedRoles((prevRoles: string[]) => {
+          const newRoles = [...prevRoles, roleId];
+          console.log(`🎭 步骤1: 已选择角色列表更新:`, {
+            previous: prevRoles,
+            new: newRoles,
+            added: roleId,
+          });
+          return newRoles;
         });
-        return newRoles;
-      });
 
-      // 步骤3: 检查WebSocket连接状态并发送选择消息到服务器
-      if (wsRef.current && wsConnected) {
-        console.log(`🎭 步骤3: WebSocket连接正常，准备发送角色选择消息`);
+        // 步骤2: 检查WebSocket连接状态并发送选择消息到服务器
+        if (webSocket.connected) {
+          console.log(`🎭 步骤2: WebSocket连接正常，准备发送角色选择消息`);
 
-        // 步骤3.1: 构造消息对象
-        const message = {
-          type: "select_role",
-          data: { role: roleId },
-        };
-        console.log(`🎭 步骤3.1: 构造消息对象:`, message);
+          // 步骤2.1: 构造消息对象
+          const message = {
+            type: "select_role",
+            data: { role: roleId },
+          };
+          console.log(`🎭 步骤2.1: 构造消息对象:`, message);
 
-        // 步骤3.2: 发送消息到服务器
-        console.log(`🎭 步骤3.2: 发送角色选择消息到服务器`);
-        wsRef.current.send(JSON.stringify(message));
-        console.log(`🎭 步骤3.2: 消息发送完成`);
+          // 步骤2.2: 发送消息到服务器
+          console.log(`🎭 步骤2.2: 发送角色选择消息到服务器`);
+          webSocket.send(message);
+          console.log(`🎭 步骤2.2: 消息发送完成`);
 
-        console.log(`🎭 完成: 角色选择流程完成，等待服务器确认`);
-      } else {
-        // 步骤3.alt: WebSocket未连接的错误处理
-        console.error(`🎭 步骤3.alt: WebSocket未连接，无法发送角色选择消息`);
-        console.error(
-          `🎭 步骤3.alt: 连接状态 - wsRef存在: ${!!wsRef.current}, 已连接: ${wsConnected}`
-        );
-        // 注意: 本地状态已更新，如果连接恢复，可以通过状态同步机制处理
-      }
-    },
-    [wsRef, wsConnected, playerName, setPlayers, setSelectedRoles]
-  );
+          console.log(`🎭 完成: 角色选择流程完成，等待服务器确认`);
+        } else {
+          // 步骤2.alt: WebSocket未连接的错误处理
+          console.error(`🎭 步骤2.alt: WebSocket未连接，无法发送角色选择消息`);
+          console.error(`🎭 步骤2.alt: 连接状态 - 已连接: ${webSocket.connected}`);
+          // 注意: 本地状态已更新，如果连接恢复，可以通过状态同步机制处理
+        }
+      },
+      [webSocket, setSelectedRoles]
+    );
 
   /**
    * 处理游戏行动提交
@@ -339,16 +358,14 @@ export function useGameState(): UseGameStateReturn {
    */
   const handleActionSubmit = useCallback(
     (action: PlayerAction): void => {
-      if (wsRef.current && wsConnected) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: "game_action",
-            data: action,
-          })
-        );
+      if (webSocket.connected) {
+        webSocket.send({
+          type: "game_action",
+          data: action,
+        });
       }
     },
-    [wsRef, wsConnected]
+    [webSocket]
   );
 
   /**
@@ -372,19 +389,19 @@ export function useGameState(): UseGameStateReturn {
    * 如果有WebSocket连接则发送重启消息，否则本地重置
    */
   const handleRestartGame = useCallback((): void => {
-    if (wsRef.current && wsConnected) {
-      wsRef.current.send(JSON.stringify({ type: "restart_game" }));
+    if (webSocket.connected) {
+      webSocket.send({ type: "restart_game", data: {} });
     } else {
       resetGameState();
     }
-  }, [wsRef, wsConnected, resetGameState]);
+  }, [webSocket, resetGameState]);
 
   /**
    * 处理退出房间
-   * 发送退出消息给后端，关闭WebSocket连接，清除保存状态，返回房间选择页面
+   * 发送退出消息给后端，清除保存状态，返回房间选择页面
    */
   const handleExitRoom = useCallback(async (): Promise<void> => {
-    // 如果有WebSocket连接，先发送退出房间消息
+    // 发送退出房间消息
     try {
       const response = await fetch(`${httpBaseUrl}/rooms/exit`, {
         method: "POST",
@@ -392,31 +409,18 @@ export function useGameState(): UseGameStateReturn {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          player_name: playerName,
+          player_name: room.player,
         }),
       });
 
       if (response.ok) {
         console.log("退出房间成功");
-        if (wsRef.current) {
-          wsRef.current.close();
-          wsRef.current = null;
-        }
       } else {
         console.error("退出房间失败");
       }
     } catch (error) {
       console.warn("发送退出房间消息失败:", error);
-      // 即使发送失败也要关闭连接
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
     }
-
-    // 重置相关状态
-    setWsConnected(false);
-    setCurrentRoom("");
 
     // 重置游戏状态（但不包括gameState，因为我们要手动设置）
     setCurrentRound(1);
@@ -428,31 +432,23 @@ export function useGameState(): UseGameStateReturn {
     setWaitingForPlayers(false);
     setGameBackground(null);
     setRoleDefinitions(null);
-    setRoomList([]);
-    setLoadingRoomList(false);
 
     // 切换到房间选择页面
     setGameState(GAME_UX_PAGEING.ROOM_SELECTION);
-  }, [
-    wsRef,
-    wsConnected,
-    playerName,
-    currentRoom,
-    setWsConnected,
-    setCurrentRoom,
-    setGameState,
-    setCurrentRound,
-    setRoundEvent,
-    setPrivateMessages,
-    setPlayerActions,
-    setGameResult,
-    setSelectedRoles,
-    setWaitingForPlayers,
-    setGameBackground,
-    setRoleDefinitions,
-    setRoomList,
-    setLoadingRoomList,
-  ]);
+      }, [
+      room.player,
+      setGameState,
+      setCurrentRound,
+      setRoundEvent,
+      setPrivateMessages,
+      setPlayerActions,
+      setGameResult,
+      setSelectedRoles,
+      setWaitingForPlayers,
+      setGameBackground,
+      setRoleDefinitions,
+      httpBaseUrl,
+    ]);
 
   // ==================== 前端阶段控制方法 ====================
 
@@ -494,7 +490,7 @@ export function useGameState(): UseGameStateReturn {
   const submitSelectedAction = useCallback((): void => {
     if (!selectedAction) return;
     const action: PlayerAction = {
-      playerName,
+      playerName: room.player,
       actionType: "decision",
       action: selectedAction,
       round: currentRound,
@@ -504,7 +500,7 @@ export function useGameState(): UseGameStateReturn {
     setHasSubmitted(true);
   }, [
     selectedAction,
-    playerName,
+    room.player,
     currentRound,
     handleActionSubmit,
     setHasSubmitted,
@@ -551,7 +547,9 @@ export function useGameState(): UseGameStateReturn {
     setShowPrivateModal,
     setShowEventModal,
     resetGameState,
-    // 基础事件处理
+
+
+    // ========== 事件处理函数 ==========
     handleInitialPageClick,
     handlePlayerNameSet,
     handleRoomActionWithConnection,
@@ -562,8 +560,6 @@ export function useGameState(): UseGameStateReturn {
     handleLoadingComplete,
     handleRestartGame,
     handleExitRoom,
-
-    // 前端阶段控制
     goToSelection,
     goToInfoAndOptions,
     goToDiscussion,

@@ -7,7 +7,7 @@ import { Button } from "./Button";
  * 用户输入用户名的页面
  */
 function UserNamePage() {
-  const { handlePlayerNameSet } = useGame();
+  const { gameState } = useGame();
   const [playerName, setPlayerName] = useState<string>("");
 
   /**
@@ -17,7 +17,7 @@ function UserNamePage() {
   const handleSubmit = (e: FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
     if (playerName.trim()) {
-      handlePlayerNameSet(playerName.trim());
+      gameState.handlePlayerNameSet(playerName.trim());
     }
   };
 

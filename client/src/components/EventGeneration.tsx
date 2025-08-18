@@ -11,7 +11,7 @@ type AnimationPhase = "intro" | "loading" | "complete";
  * 显示角色选择完成后的过渡动画和倒计时
  */
 function EventGeneration() {
-  const { playerName, handleStartRound } = useGame();
+  const { gameState, room } = useGame();
 
   const [animationPhase, setAnimationPhase] = useState<AnimationPhase>("intro");
   const [countdown, setCountdown] = useState<number>(5);
@@ -30,8 +30,8 @@ function EventGeneration() {
           if (prev <= 1) {
             clearInterval(countdownTimer);
             // 倒计时结束，触发游戏开始
-            if (handleStartRound) {
-              handleStartRound();
+            if (gameState.handleStartRound) {
+              gameState.handleStartRound();
             }
             return 0;
           }
@@ -44,7 +44,7 @@ function EventGeneration() {
       clearTimeout(timer1);
       clearTimeout(timer2);
     };
-  }, [handleStartRound]);
+  }, [gameState.handleStartRound]);
 
   /**
    * 渲染不同阶段的动画
@@ -111,7 +111,7 @@ function EventGeneration() {
       {/* 玩家信息 */}
       <div className="absolute top-4 right-4 text-right">
         <div className="text-sm text-gray-400">玩家</div>
-        <div className="text-lg font-semibold text-white">{playerName}</div>
+        <div className="text-lg font-semibold text-white">{room.player}</div>
       </div>
     </div>
   );

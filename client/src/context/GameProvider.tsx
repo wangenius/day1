@@ -38,7 +38,11 @@ export function GameProvider({ children }: GameProviderProps) {
   });
 
   // 游戏状态管理:
-  const gameState = useGameState();
+  const gameState = useGameState({
+    room,
+    webSocket,
+    httpBaseUrl: API_BASE,
+  });
 
   useEffect(() => {
     console.log("gameState", gameState);

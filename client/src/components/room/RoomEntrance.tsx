@@ -8,21 +8,15 @@ import { RoomInfo } from "@/const/const";
  * 用户输入团队暗号加入房间的页面
  */
 function RoomEntrance() {
-  const {
-    handleRoomAction,
-    playerName,
-    roomList,
-    loadingRoomList,
-    fetchRoomList,
-  } = useGame();
+  const { room } = useGame();
   const [teamCode, setTeamCode] = useState<string[]>(["", "", "", ""]);
   const [loading, setLoading] = useState<boolean>(false);
   const [showRoomList, setShowRoomList] = useState<boolean>(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    console.log(roomList);
-  }, [roomList]);
+    console.log(room.roomList);
+  }, [room.roomList]);
 
   /**
    * 处理快速加入房间
@@ -30,7 +24,7 @@ function RoomEntrance() {
   const handleQuickJoin = async (roomId: string): Promise<void> => {
     setLoading(true);
     try {
-      await handleRoomAction("join", roomId);
+      await room.join(roomId);
       setShowRoomList(false);
     } catch (error) {
       // 错误处理已经在 handleRoomAction 中完成
@@ -69,7 +63,7 @@ function RoomEntrance() {
    */
   const handleShowRoomList = (): void => {
     setShowRoomList(true);
-    fetchRoomList();
+    room.list();
   };
 
   /**
@@ -113,7 +107,7 @@ function RoomEntrance() {
     if (!code.trim()) return;
     setLoading(true);
     try {
-      await handleRoomAction("join", code);
+      await room.join(code);
     } catch (error) {
       // 错误处理已经在 handleRoomAction 中完成
       console.error("加入房间失败:", error);
@@ -148,7 +142,7 @@ function RoomEntrance() {
         退出账号
       </button>
       <div className="absolute top-4 right-4 text-right text-white text-sm font-medium font-['Space_Grotesk'] [text-shadow:_0px_2px_1px_rgb(0_0_0_/_0.25)]">
-        {playerName}
+        {room.player}
       </div>
       <div className="flex flex-col items-center space-y-8">
         {/* 标题 */}
@@ -230,13 +224,13 @@ function RoomEntrance() {
 
             {/* 房间列表内容 */}
             <div className="p-4 max-h-96 overflow-y-auto">
-              {loadingRoomList ? (
+              {room.loadingRoomList ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="text-white/70 text-base font-normal font-['Cactus_Classical_Serif']">
                     加载中...
                   </div>
                 </div>
-              ) : roomList.length === 0 ? (
+              ) : room.roomList.length === 0 ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="text-white/70 text-base font-normal font-['Cactus_Classical_Serif']">
                     暂无在线房间
@@ -244,7 +238,7 @@ function RoomEntrance() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {roomList.map((room) => (
+                  {room.roomList.map((room) => (
                     <div
                       key={room.id}
                       className="bg-stone-800 rounded-lg p-4 border border-white/10 hover:border-white/20 transition-colors"
@@ -289,11 +283,13 @@ function RoomEntrance() {
             {/* 刷新按钮 */}
             <div className="p-4 border-t border-white/20">
               <button
-                onClick={fetchRoomList}
-                disabled={loadingRoomList}
+                onClick={() => {
+                  room.list();
+                }}
+                disabled={room.loadingRoomList}
                 className="w-full py-2 bg-white/10 hover:bg-white/20 disabled:bg-white/5 text-white text-sm rounded transition-colors"
               >
-                {loadingRoomList ? "刷新中..." : "刷新列表"}
+                {room.loadingRoomList ? "刷新中..." : "刷新列表"}
               </button>
             </div>
           </div>
