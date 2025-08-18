@@ -145,7 +145,7 @@ function RoomEntrance() {
           <polyline points="16,17 21,12 16,7" />
           <line x1="21" y1="12" x2="9" y2="12" />
         </svg>
-        退出账户
+        退出账号
       </button>
       <div className="absolute top-4 right-4 text-right text-white text-sm font-medium font-['Space_Grotesk'] [text-shadow:_0px_2px_1px_rgb(0_0_0_/_0.25)]">
         {playerName}
