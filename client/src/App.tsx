@@ -31,7 +31,7 @@ function App() {
         return <IdeaPickerInRoom />;
       case GAME_UX_PAGEING.ROLE_SELECTION:
         return <RoleSelection />;
-      case GAME_UX_PAGEING.LOADING:
+      case GAME_UX_PAGEING.BACKGROUND_LOADING:
         return <GameLoadingPage />;
       case GAME_UX_PAGEING.ROUND_LOADING:
         return <RoundLoadingPage />;
@@ -39,8 +39,6 @@ function App() {
         return <EventGeneration />;
       case GAME_UX_PAGEING.PLAYING:
         return <GamePlay />;
-      case GAME_UX_PAGEING.ROUND_RESULT:
-        return null;
       case GAME_UX_PAGEING.RESULT:
         return <GameResult />;
       default:

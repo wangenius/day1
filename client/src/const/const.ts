@@ -7,16 +7,14 @@ export const GAME_UX_PAGEING = {
   IDEA_INPUT: "idea_input",
   /** 角色选择 */
   ROLE_SELECTION: "role_selection",
-  /** 加载 */
-  LOADING: "loading",
+  /** 加载背景 */
+  BACKGROUND_LOADING: "background_loading",
   /** 回合加载 */
   ROUND_LOADING: "round_loading",
   /** 事件生成 */
   EVENT_GENERATION: "event_generation",
   /** 游戏进行中 */
   PLAYING: "playing",
-  /** 回合结果 */
-  ROUND_RESULT: "round_result",
   /** 游戏结果 */
   RESULT: "result",
 } as const;
