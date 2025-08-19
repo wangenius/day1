@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import type { RoomInfo } from "../../const/const";
 import { getServerConfig } from "../utils/serverConfig";
+import { UseWebSocketReturn } from "./useWebSocket";
 
 /**
  * 游戏 API Hook 参数接口
  * 定义了 useGameAPI Hook 所需的所有参数
  */
 export interface UseRoomParams {
-  /** 建立 WebSocket 连接的方法 */
-  connectWebSocket: (player: string, roomId: string) => void;
+  webSocket: UseWebSocketReturn;
 }
 
 export type RoomState =
@@ -75,7 +75,7 @@ const { http } = getServerConfig();
  * @returns 返回 API 操作方法的对象
  */
 export function useRoom(params: UseRoomParams): UseRoomReturn {
-  const { connectWebSocket } = params;
+  const { webSocket } = params;
 
   const [roomList, setRoomList] = useState<RoomInfo[]>([]);
   const [room, setRoom] = useState<RoomInfo | null>(null);
@@ -167,7 +167,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
           message?: string;
         };
 
-        connectWebSocket;
+        webSocket.connect(player, roomId);
 
         // 步骤7: 检查操作是否成功
         if (data.success) {
@@ -240,7 +240,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
           console.log(data);
 
           if (room_id) {
-            connectWebSocket(player, room_id);
+            webSocket.connect(player, room_id);
           } else {
             console.log(`房间 ${room_id} 不存在，返回房间选择页面`);
             setRoomState("entrance");
@@ -281,6 +281,44 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
       reconnect(savedPlayerName);
     }
   }, [reconnect]);
+
+  useEffect(() => {
+    if (webSocket.connected) {
+      webSocket.listen((message) => {
+        if (message.type === "connection_success") {
+          const data = message.data as {
+            room_id: string;
+            player_id: string;
+            is_reconnect: boolean;
+            players: any[];
+            room_state: "waiting" | "playing";
+            game_state: any;
+          };
+          if (data.room_state === "waiting") {
+            setRoomState("waiting");
+          } else {
+            setRoomState("playing");
+          }
+          setRoom({
+            id: data.room_id,
+            state: data.room_state as "waiting" | "playing",
+            players: data.players,
+          });
+        }
+        if (message.type === "players") {
+          const data = message.data as {
+            players: any[];
+          };
+          setRoom((prev) => {
+            if (prev) {
+              return { ...prev, players: data.players };
+            }
+            return prev;
+          });
+        }
+      });
+    }
+  }, [webSocket.connected]);
 
   return {
     player,

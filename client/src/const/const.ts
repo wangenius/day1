@@ -135,7 +135,7 @@ export interface RoomInfo {
   /** 房间ID */
   id: string;
   /** 房间状态 */
-  state: "prepare" | "playing";
+  state: "waiting" | "playing";
   /** 玩家列表 */
   players: Player[];
 }

@@ -1,6 +1,7 @@
 import { Game } from "./Game.js";
 import { Player } from "./Player.js";
 import { RoomState, RoleEnum, PlayerInfo, GameInfo } from "./types/types.js";
+import { logger } from "./utils/logger.js";
 
 /**
  * 游戏房间管理类
@@ -30,7 +31,7 @@ export class Room {
   created_at: Date;
 
   /** 房间当前状态 - PREPARE(准备阶段) | PLAYING(游戏进行中) */
-  state: RoomState = RoomState.PREPARE;
+  state: RoomState = RoomState.WAITING;
 
   /** 当前房间关联的游戏实例 - 处理所有游戏逻辑 */
   game: Game;
@@ -59,7 +60,7 @@ export class Room {
    * @param options.includeIdea 是否包含创业想法信息
    * @returns 格式化的玩家信息数组
    */
-  getPlayersPayload() {
+  get_all_players() {
     return Array.from(this.players.values()).map((p) => {
       const base: any = {
         name: p.name,
@@ -115,7 +116,16 @@ export class Room {
    * @param message 要广播的消息对象
    * @returns 成功发送消息的玩家数量
    */
-  async broadcast(message: { type: string; data: any }) {
+  async broadcast(message: {
+    type: "players" | "game_state";
+    data: {
+      room_id?: string;
+      player_id?: string;
+      players?: PlayerInfo[];
+      game_state?: GameInfo;
+      room_state?: RoomState;
+    };
+  }) {
     let sent = 0;
     for (const p of Array.from(this.players.values())) {
       if (!p.is_online) continue;
@@ -145,7 +155,7 @@ export class Room {
    * @throws Error 当游戏已开始或房间已满时
    */
   add_player(player: Player) {
-    if (this.state !== RoomState.PREPARE)
+    if (this.state !== RoomState.WAITING)
       throw new Error("游戏已开始，无法加入房间");
     const existing = this.get_player(player.name);
     if (existing) {
@@ -156,6 +166,8 @@ export class Room {
       throw new Error("房间已满，最多4人");
     if (this.players.size === 0) player.is_host = true;
     this.players.set(player.name, player);
+    logger.info(`玩家 ${player.name} 加入房间`);
+    logger.info("当前玩家:", this.get_online_players());
     return true;
   }
 
@@ -167,6 +179,8 @@ export class Room {
   offline_player(player_name: string) {
     const p = this.get_player(player_name);
     if (p) p.is_online = false;
+    logger.info(`玩家 ${player_name} 离线`);
+    logger.info("当前玩家:", this.get_online_players());
     return true;
   }
 
@@ -177,6 +191,8 @@ export class Room {
    */
   remove_player(player_name: string) {
     this.players.delete(player_name);
+    logger.info(`玩家 ${player_name} 离开房间`);
+    logger.info("当前玩家:", this.get_online_players());
     return true;
   }
 

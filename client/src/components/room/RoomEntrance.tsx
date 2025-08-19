@@ -41,7 +41,7 @@ function RoomEntrance() {
    * @returns 是否可以加入
    */
   const canJoinRoom = (room: RoomInfo): boolean => {
-    return room.state === "prepare" && room.players.length < 4;
+    return room.state === "waiting" && room.players.length < 4;
   };
 
   /**

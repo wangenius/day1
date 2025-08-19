@@ -24,6 +24,11 @@ app.get("/", (_req, res) => {
 app.post("/rooms/join", (req, res) => {
   try {
     const { room_id, player_id } = req.body;
+
+    if (Room.get_by_player(player_id)) {
+      return res.json({ success: false, message: "玩家已存在" });
+    }
+
     const existing = Room.get(room_id);
     if (existing) {
       Room.join(player_id, room_id);
@@ -70,11 +75,10 @@ app.post("/rooms/leave", async (req, res) => {
 
     // 如果还有其他在线玩家，通知他们该玩家已离开
     if (remaining_online.length) {
-      const updatedPlayers = room.getPlayersPayload();
+      const updatedPlayers = room.get_all_players();
       await room.broadcast({
-        type: "player_leave",
+        type: "players",
         data: {
-          player_id,
           players: updatedPlayers,
         },
       });
@@ -100,7 +104,7 @@ app.get("/rooms", (_req, res) => {
       list.push({
         id,
         state: room.state,
-        players: room.getPlayersPayload(),
+        players: room.get_all_players(),
       });
     }
     res.json({ success: true, rooms: list, total_count: list.length });

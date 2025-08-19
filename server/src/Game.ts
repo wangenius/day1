@@ -11,53 +11,6 @@ import {
 import { LLM } from "./utils/llm.js";
 import { logger } from "./utils/logger.js";
 
-/**
- * 游戏消息类型枚举
- *
- * 定义了游戏过程中所有的状态变化和事件通知类型：
- *
- * 连接相关：
- * - CONNECTION_SUCCESS: 连接成功
- * - PLAYER_JOIN/LEAVE: 玩家加入/离开
- *
- * 游戏阶段：
- * - IDEAS_COMPLETE: 创业想法收集完成
- * - GAME_LOADING: 游戏加载中（AI生成背景）
- * - GAME_START: 游戏开始
- * - GAME_STARTED: 游戏正式开始（第一轮）
- *
- * 角色相关：
- * - ROLE_SELECTED: 角色选择完成
- *
- * 轮次相关：
- * - ROUND_LOADING: 轮次加载中（AI生成事件）
- * - ROUND_START: 轮次开始
- * - ROUND_PHASE: 轮次阶段切换
- * - ROUND_TICK: 轮次计时更新
- * - ACTION_SUBMITTED: 玩家行动提交
- *
- * 游戏结束：
- * - GAME_COMPLETE: 游戏完成
- * - GAME_RESTART: 游戏重启
- */
-enum MessageType {
-  CONNECTION_SUCCESS = "connection_success",
-  PLAYER_JOIN = "player_join",
-  PLAYER_LEAVE = "player_leave",
-  IDEAS_COMPLETE = "ideas_complete",
-  GAME_LOADING = "game_loading",
-  GAME_START = "game_start",
-  GAME_STARTED = "game_started",
-  ROLE_SELECTED = "role_selected",
-  ROUND_LOADING = "round_loading",
-  ROUND_START = "round_start",
-  ROUND_PHASE = "round_phase",
-  ROUND_TICK = "round_tick",
-  ACTION_SUBMITTED = "action_submitted",
-  GAME_COMPLETE = "game_complete",
-  GAME_RESTART = "game_restart",
-}
-
 const promptDir = path.join(
   path.dirname(new URL(import.meta.url).pathname),
   "prompt"
@@ -314,8 +267,12 @@ export class Game {
       )
         return;
       await r.broadcast({
-        type: MessageType.ROUND_PHASE,
-        data: { phase: "info_and_options", round: expected_round },
+        type: "game_state",
+        data: {
+          room_state: this.room.state,
+          game_state: this.gameInfo,
+          players: this.room.get_all_players(),
+        },
       });
     }, 10000);
     setTimeout(async () => {
@@ -328,8 +285,12 @@ export class Game {
       )
         return;
       await r.broadcast({
-        type: MessageType.ROUND_PHASE,
-        data: { phase: "discussion", round: expected_round },
+        type: "game_state",
+        data: {
+          room_state: this.room.state,
+          game_state: this.gameInfo,
+          players: this.room.get_all_players(),
+        },
       });
     }, 30000);
     this._startRoundTick();
@@ -690,20 +651,15 @@ export class Game {
           roundInfo.phase_remain = Math.max(roundInfo.phase_remain - 1, 0);
         }
 
-        const payload = {
-          type: MessageType.ROUND_TICK,
-          data: {
-            round: current_round,
-            phase: "discussion", // 简化阶段概念
-            remaining: roundInfo?.phase_remain || 0,
-            roundEvent: roundInfo,
-            privateMessages: roundInfo?.private_messages || {},
-            playerActions: Object.entries(roundInfo?.player_actions || {}),
-            waitingForPlayers: !this._allPlayersSubmitted(current_round),
-            players: this.room.getPlayersPayload(),
-          },
-        };
-        if (this.room) await this.room.broadcast(payload);
+        if (this.room)
+          await this.room.broadcast({
+            type: "game_state",
+            data: {
+              game_state: gameInfo,
+              room_state: this.room.state,
+              players: this.room.get_all_players(),
+            },
+          });
         if (
           roundInfo?.phase_remain === 0 &&
           !this._allPlayersSubmitted(current_round)
@@ -785,10 +741,9 @@ export class Game {
     // 将创业想法存储到 GameInfo 中
     this.gameInfo.ideas[player_name] = idea;
     await this.room.broadcast({
-      type: MessageType.PLAYER_JOIN,
+      type: "game_state",
       data: {
-        player_name: player_name,
-        players: this.room.getPlayersPayload(),
+        game_state: this.gameInfo,
       },
     });
     if (this.room.all_players_have_ideas()) {
@@ -797,10 +752,9 @@ export class Game {
         ? this.gameInfo.ideas[firstPlayer.name] || ""
         : "";
       await this.room.broadcast({
-        type: MessageType.IDEAS_COMPLETE,
+        type: "game_state",
         data: {
-          startup_idea: this.gameInfo.selected_idea,
-          players: this.room.getPlayersPayload(),
+          game_state: this.gameInfo,
         },
       });
     }
@@ -809,19 +763,23 @@ export class Game {
   async handle_start_game(player_name: string) {
     const player = this.room.get_player(player_name);
     if (!player || !player.is_host) return;
-    if (this.room.state !== RoomState.PREPARE) return;
+    if (this.room.state !== RoomState.WAITING) return;
     await this.room.broadcast({
-      type: MessageType.GAME_LOADING,
-      data: { message: "AI正在生成游戏背景，请稍候..." },
+      type: "game_state",
+      data: {
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
+      },
     });
     const gameInfo = await this._ensureBackgroundAndRoles();
     this.room.state = RoomState.PLAYING;
     await this.room.broadcast({
-      type: MessageType.GAME_START,
+      type: "game_state",
       data: {
-        startup_idea: this.gameInfo.selected_idea,
-        background: gameInfo.background,
-        roles: gameInfo.roles,
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
       },
     });
   }
@@ -884,10 +842,11 @@ export class Game {
     // 将角色存储到 GameInfo 中
     this.gameInfo.roles[player_name] = role as RoleEnum;
     await this.room.broadcast({
-      type: MessageType.ROLE_SELECTED,
+      type: "game_state",
       data: {
-        selectedRoles: this.room.get_selected_roles(),
-        players: this.room.getPlayersPayload(),
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
       },
     });
     if (this.room.all_players_have_roles()) {
@@ -898,38 +857,49 @@ export class Game {
   private async _auto_start_game_after_role_selection() {
     this.room.state = RoomState.PLAYING;
     await this.room.broadcast({
-      type: MessageType.GAME_LOADING,
-      data: { message: "AI正在生成游戏背景和角色介绍，请稍候..." },
+      type: "game_state",
+      data: {
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
+      },
     });
     await this._ensureBackgroundAndRoles();
     await this.room.broadcast({
-      type: MessageType.GAME_START,
+      type: "game_state",
       data: {
-        startup_idea: this.gameInfo.selected_idea,
-        background: this.gameInfo.background,
-        roles: this.gameInfo.roles,
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
       },
     });
     this.gameInfo.current_round = 1;
     await this.room.broadcast({
-      type: MessageType.ROUND_LOADING,
-      data: { round: 1, message: "AI正在生成第1轮事件，请稍候..." },
+      type: "game_state",
+      data: {
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
+      },
     });
     const event = await this._prepareRoundData(1);
     this.room.state = RoomState.PLAYING;
     const roundInfo = this.gameInfo.rounds[1];
     await this.room.broadcast({
-      type: MessageType.GAME_STARTED,
+      type: "game_state",
       data: {
-        round: 1,
-        roundEvent: roundInfo,
-        privateMessages: roundInfo?.private_messages || {},
-        isDefaultEvent: !!event.is_default_event,
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
       },
     });
     await this.room.broadcast({
-      type: MessageType.ROUND_PHASE,
-      data: { phase: "event_display", round: 1 },
+      type: "game_state",
+      data: {
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
+      },
     });
     this._schedulePhaseTransitions(1);
     // timeout auto submit
@@ -982,12 +952,11 @@ export class Game {
     this._addRoundAction(current_round, player_name, action_data?.action);
 
     await this.room.broadcast({
-      type: MessageType.ACTION_SUBMITTED,
+      type: "game_state",
       data: {
-        playerActions: Object.entries(
-          gameInfo.rounds[current_round]?.player_actions || {}
-        ),
-        waitingForPlayers: !this._allPlayersSubmitted(current_round),
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
       },
     });
 
@@ -1006,10 +975,14 @@ export class Game {
   private async _handle_game_complete() {
     try {
       const result = await this.calculateGameResult();
-      this.room.state = RoomState.PREPARE;
+      this.room.state = RoomState.WAITING;
       await this.room.broadcast({
-        type: MessageType.GAME_COMPLETE,
-        data: result,
+        type: "game_state",
+        data: {
+          room_state: this.room.state,
+          game_state: this.gameInfo,
+          players: this.room.get_all_players(),
+        },
       });
     } finally {
       this.cleanupRoom();
@@ -1020,8 +993,12 @@ export class Game {
     const gameInfo = this.gameInfo;
     const next = gameInfo.current_round + 1;
     await this.room.broadcast({
-      type: MessageType.ROUND_LOADING,
-      data: { round: next, message: `AI正在生成第${next}轮事件，请稍候...` },
+      type: "game_state",
+      data: {
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
+      },
     });
     try {
       await this.generateRoundAnalysis(next);
@@ -1030,17 +1007,20 @@ export class Game {
     gameInfo.current_round = next;
     const roundInfo = gameInfo.rounds[next];
     await this.room.broadcast({
-      type: MessageType.ROUND_START,
+      type: "game_state",
       data: {
-        round: next,
-        roundEvent: roundInfo,
-        privateMessages: roundInfo?.private_messages || {},
-        isDefaultEvent: !!event.is_default_event,
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
       },
     });
     await this.room.broadcast({
-      type: MessageType.ROUND_PHASE,
-      data: { phase: "event_display", round: next },
+      type: "game_state",
+      data: {
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
+      },
     });
     this._schedulePhaseTransitions(next);
     const key = this._taskKey(this.room.id, next);
@@ -1060,11 +1040,13 @@ export class Game {
     this.cleanupRoom();
     this.gameInfo = createDefaultGameInfo();
     this.gameInfo.selected_idea = "";
-    this.room.state = RoomState.PREPARE;
+    this.room.state = RoomState.WAITING;
     await this.room.broadcast({
-      type: MessageType.GAME_RESTART,
+      type: "game_state",
       data: {
-        players: this.room.getPlayersPayload(),
+        room_state: this.room.state,
+        game_state: this.gameInfo,
+        players: this.room.get_all_players(),
       },
     });
   }

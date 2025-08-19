@@ -219,8 +219,6 @@ export function useWebSocket(): UseWebSocketReturn {
             player_id: player,
             room_id: roomId,
           };
-
-          // 步骤4.2: 发送身份验证信息到服务器
           wsRef.current.send(JSON.stringify(authData));
 
           // 设置消息处理器
@@ -228,6 +226,7 @@ export function useWebSocket(): UseWebSocketReturn {
             wsRef.current.onmessage = (event: MessageEvent) => {
               try {
                 const message = JSON.parse(event.data) as WebSocketMessage;
+                console.log(message);
                 executeListeners(message);
               } catch (error) {
                 console.error("WebSocket消息解析错误:", error);

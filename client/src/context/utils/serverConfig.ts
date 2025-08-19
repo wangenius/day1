@@ -23,7 +23,7 @@ export const getServerConfig = (): ServerConfig => {
     const currentHost = window.location.hostname;
     // 本地开发环境
     if (currentHost === "localhost" || currentHost === "127.0.0.1") {
-      return { http: `http://localhost:8000`, ws: `ws://localhost:8000` };
+      return { http: `http://localhost:8000`, ws: `ws://localhost:8000/ws` };
     }
 
     // 其他开发环境（如局域网IP）

@@ -5,8 +5,8 @@
  * 只有准备中的时候房间可以加入玩家，其他时候不可以加入玩家。
  */
 export enum RoomState {
-  /** 准备 */
-  PREPARE = "prepare",
+  /** 等待 */
+  WAITING = "waiting",
   /** 进行中 */
   PLAYING = "playing",
 }

@@ -26,7 +26,7 @@ export function GameProvider({ children }: GameProviderProps) {
 
   // API 管理
   const room = useRoom({
-    connectWebSocket: webSocket.connect,
+    webSocket,
   });
 
   // 游戏状态管理:
