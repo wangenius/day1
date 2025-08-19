@@ -24,10 +24,11 @@ function RoomEntrance() {
   const handleQuickJoin = async (roomId: string): Promise<void> => {
     setLoading(true);
     try {
-      await room.join(roomId);
+      const roomInfo = await room.join(roomId);
+      console.log(roomInfo);
+      room.setRoomState("waiting");
       setShowRoomList(false);
     } catch (error) {
-      // 错误处理已经在 handleRoomAction 中完成
       console.error("快速加入房间失败:", error);
     } finally {
       setLoading(false);
@@ -108,6 +109,8 @@ function RoomEntrance() {
     setLoading(true);
     try {
       await room.join(code);
+      room.setRoomState("waiting");
+      setShowRoomList(false);
     } catch (error) {
       // 错误处理已经在 handleRoomAction 中完成
       console.error("加入房间失败:", error);

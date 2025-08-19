@@ -2,7 +2,7 @@ import { useGame } from "../../context/GameContext";
 import { Button } from "../Button";
 
 export function RoomLobby() {
-  const { room, gameState } = useGame();
+  const { room } = useGame();
 
   // 获取当前玩家信息
   const currentPlayer = room.room?.players.find((p) => p.name === room.player);

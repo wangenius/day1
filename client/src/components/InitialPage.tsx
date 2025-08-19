@@ -5,13 +5,18 @@ import { useGame } from "../context/GameContext";
  * 游戏的启动页面，点击任意位置进入欢迎页面
  */
 export function InitialPage() {
-  const { gameState } = useGame();
+  const { room } = useGame();
 
   return (
     <div
       className="min-h-screen w-full bg-stone-950 overflow-hidden cursor-pointer hover:opacity-90 transition-opacity flex flex-col justify-between p-4"
       onClick={() => {
-        gameState.handleInitialPageClick();
+        console.log(room.player);
+        if (!room.player) {
+          room.setRoomState("username");
+        } else {
+          room.setRoomState("entrance");
+        }
       }}
     >
       {/* 顶部Day1标签 */}

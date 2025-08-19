@@ -29,7 +29,7 @@ export const getServerConfig = (): ServerConfig => {
     // 其他开发环境（如局域网IP）
     return {
       http: `http://${currentHost}:8000`,
-      ws: `ws://${currentHost}:8000`,
+      ws: `ws://${currentHost}:8000/ws`,
     };
   }
 

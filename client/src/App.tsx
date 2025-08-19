@@ -13,18 +13,20 @@ import { useGame } from "./context/GameContext";
 import { RoomLobby } from "./components/room/RoomLobby";
 
 function App() {
-  const { gameState } = useGame();
+  const { room, gameState } = useGame();
 
   const renderCurrentState = () => {
-    switch (gameState.gameState) {
-      case GAME_UX_PAGEING.INITIAL:
+    switch (room.roomState) {
+      case "landing_page":
         return <InitialPage />;
-      case GAME_UX_PAGEING.USERNAME:
+      case "username":
         return <UserNamePage />;
-      case GAME_UX_PAGEING.ROOM_SELECTION:
+      case "entrance":
         return <RoomEntrance />;
-      case GAME_UX_PAGEING.ROOM_LOBBY:
+      case "waiting":
         return <RoomLobby />;
+    }
+    switch (gameState.gameState) {
       case GAME_UX_PAGEING.IDEA_INPUT:
         return <IdeaPickerInRoom />;
       case GAME_UX_PAGEING.ROLE_SELECTION:

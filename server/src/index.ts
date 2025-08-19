@@ -30,6 +30,7 @@ app.post("/rooms/join", (req, res) => {
     } else {
       Room.create(room_id);
       Room.join(player_id, room_id);
+      logger.info(`玩家 ${player_id} 加入房间 ${room_id}`);
     }
     logger.info(`玩家 ${player_id} 加入房间 ${room_id}`);
     return res.json({ room_id, success: true });
@@ -48,21 +49,21 @@ app.post("/rooms/reconnect", (req, res) => {
 });
 
 // 退出房间
-app.post("/rooms/exit", async (req, res) => {
-  const { player_name } = req.body;
+app.post("/rooms/leave", async (req, res) => {
+  const { player_id } = req.body;
 
   console.log(req.body);
 
-  console.log(player_name, "退出房间");
+  console.log(player_id, "退出房间");
 
-  const room = Room.get_by_player(player_name);
+  const room = Room.get_by_player(player_id);
   if (room) {
-    const player = room.get_player(player_name);
+    const player = room.get_player(player_id);
 
     player?.socket?.close();
 
     // 完全从房间中移除玩家（非标记离线，而是彻底删除）
-    room.remove_player(player_name);
+    room.remove_player(player_id);
 
     // 获取移除玩家后的在线玩家列表
     const remaining_online = room.get_online_players();
@@ -73,7 +74,7 @@ app.post("/rooms/exit", async (req, res) => {
       await room.broadcast({
         type: "player_leave",
         data: {
-          player_name,
+          player_id,
           players: updatedPlayers,
         },
       });

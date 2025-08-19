@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import type { RoomInfo } from "../../const/const";
+import { getServerConfig } from "../utils/serverConfig";
 
 /**
  * 游戏 API Hook 参数接口
  * 定义了 useGameAPI Hook 所需的所有参数
  */
 export interface UseRoomParams {
-  /** HTTP API 的基础URL地址，用于构造完整的API请求地址 */
-  httpBaseUrl: string;
   /** 建立 WebSocket 连接的方法 */
   connectWebSocket: (player: string, roomId: string) => void;
 }
+
+export type RoomState =
+  | "landing_page"
+  | "username"
+  | "entrance"
+  | "waiting"
+  | "playing";
 
 /**
  * 游戏 API Hook 返回值接口
@@ -21,7 +27,8 @@ export interface UseRoomReturn {
   room: RoomInfo | null;
   roomList: RoomInfo[];
   loadingRoomList: boolean;
-  roomState: "selecting" | "joined";
+  roomState: RoomState;
+  setPlayer: (name: string) => void;
   /**
    * 获取当前所有在线房间列表的异步方法
    * 会自动更新房间列表状态和加载状态
@@ -50,7 +57,14 @@ export interface UseRoomReturn {
    * @param room - 房间信息
    */
   update: (room: RoomInfo) => void;
+  /**
+   * 设置房间状态
+   * @param state - 房间状态
+   */
+  setRoomState: (state: RoomState) => void;
 }
+
+const { http } = getServerConfig();
 
 /**
  * 游戏 API 管理 Hook
@@ -61,16 +75,14 @@ export interface UseRoomReturn {
  * @returns 返回 API 操作方法的对象
  */
 export function useRoom(params: UseRoomParams): UseRoomReturn {
-  const { httpBaseUrl, connectWebSocket } = params;
+  const { connectWebSocket } = params;
 
   const [roomList, setRoomList] = useState<RoomInfo[]>([]);
   const [room, setRoom] = useState<RoomInfo | null>(null);
   const [loadingRoomList, setLoadingRoomList] = useState<boolean>(false);
-  const [roomState, setRoomState] = useState<"selecting" | "joined">(
-    "selecting"
-  );
+  const [roomState, setRoomState] = useState<RoomState>("landing_page");
   /** 当前玩家名称 */
-  const [playerName, setPlayerName] = useState<string>("");
+  const [player, setPlayer] = useState<string>("");
 
   /**
    * 获取房间列表
@@ -93,7 +105,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
     setLoadingRoomList(true);
 
     try {
-      const apiUrl = `${httpBaseUrl}/rooms`;
+      const apiUrl = `${http}/rooms`;
       const response = await fetch(apiUrl);
       if (response.ok) {
         const data: { rooms: RoomInfo[] } = await response.json();
@@ -112,7 +124,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
     } finally {
       setLoadingRoomList(false);
     }
-  }, [httpBaseUrl, setLoadingRoomList, setRoomList]);
+  }, [http, setLoadingRoomList, setRoomList]);
 
   /**
    * 处理房间操作（创建或加入房间）
@@ -133,47 +145,52 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
   const join = useCallback(
     async (roomId: string): Promise<void> => {
       try {
-        const apiUrl = `${httpBaseUrl}/rooms/join`;
-        const requestBody = {
-          room_id: roomId,
-          player_id: playerName,
-        };
+        const apiUrl = `${http}/rooms/join`;
 
         // 步骤3: 构造请求配置
         const requestConfig = {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify({
+            room_id: roomId,
+            player_id: player,
+          }),
         };
+        console.log(requestConfig);
 
         // 步骤4: 发送HTTP POST请求到服务器
         const response = await fetch(apiUrl, requestConfig);
+        console.log(response);
 
         const data = (await response.json()) as {
           success: boolean;
           message?: string;
         };
 
+        connectWebSocket;
+
         // 步骤7: 检查操作是否成功
         if (data.success) {
+          setRoomState("waiting");
           return;
         } else {
           const errorMessage = data.message || "进入房间失败";
           throw new Error(errorMessage);
         }
       } catch (error) {
+        console.log(error);
         throw error;
       }
     },
-    [httpBaseUrl, playerName]
+    [http, player]
   );
 
   const leave = useCallback(async (): Promise<void> => {
     try {
-      const apiUrl = `${httpBaseUrl}/rooms/leave`;
+      const apiUrl = `${http}/rooms/leave`;
       const requestBody = {
         room_id: room?.id,
-        player_id: playerName,
+        player_id: player,
       };
 
       const requestConfig = {
@@ -190,6 +207,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
       };
 
       if (data.success) {
+        setRoomState("entrance");
         return;
       } else {
         const errorMessage = data.message || "离开房间失败";
@@ -198,7 +216,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
     } catch (error) {
       throw error;
     }
-  }, [httpBaseUrl, playerName]);
+  }, [http, player]);
 
   /**
    * 重新连接到房间
@@ -209,7 +227,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
     async (player: string): Promise<void> => {
       try {
         // 检查房间状态
-        const response = await fetch(`${httpBaseUrl}/rooms/reconnect`, {
+        const response = await fetch(`${http}/rooms/reconnect`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -225,17 +243,17 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
             connectWebSocket(player, room_id);
           } else {
             console.log(`房间 ${room_id} 不存在，返回房间选择页面`);
-            setRoomState("selecting");
+            setRoomState("entrance");
           }
         } else {
-          setRoomState("selecting");
+          setRoomState("entrance");
         }
       } catch (error) {
         console.log(`重新连接到房间失败: ${error}`);
-        setRoomState("selecting");
+        setRoomState("entrance");
       }
     },
-    [httpBaseUrl, setRoomState]
+    [http, setRoomState]
   );
 
   const update = useCallback(
@@ -245,27 +263,37 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
     [setRoom]
   );
 
+  const playerSet = useCallback(
+    (name: string) => {
+      setPlayer(name);
+      localStorage.setItem("startup_player_name", name);
+    },
+    [setPlayer]
+  );
+
   /**
    * 从localStorage 加载玩家名称, 并请求重新连接
    */
   useEffect(() => {
     const savedPlayerName = localStorage.getItem("startup_player_name");
     if (savedPlayerName) {
-      setPlayerName(savedPlayerName);
+      setPlayer(savedPlayerName);
       reconnect(savedPlayerName);
     }
   }, [reconnect]);
 
   return {
-    player: playerName,
+    player,
     room,
     roomList,
     loadingRoomList,
     roomState,
+    setPlayer: playerSet,
     list,
     join,
     leave,
     reconnect,
     update,
+    setRoomState,
   };
 }

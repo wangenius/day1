@@ -1,17 +1,6 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { type WebSocketMessage } from "../../const/const";
-
-/**
- * WebSocket Hook 参数接口
- * 定义了 useWebSocket Hook 所需的所有参数，包括服务器配置、游戏状态和回调函数
- */
-export interface UseWebSocketParams {
-  // ========== 服务器配置 ==========
-  /** WebSocket 服务器的基础URL地址，用于建立WebSocket连接 */
-  wsBaseUrl: string;
-  /** HTTP API 服务器的基础URL地址，用于房间状态检查等HTTP请求 */
-  httpBaseUrl: string;
-}
+import { getServerConfig } from "../utils/serverConfig";
 
 /**
  * WebSocket Hook 返回值接口
@@ -51,6 +40,8 @@ export interface UseWebSocketReturn {
    */
   disconnect: () => void;
 }
+
+const { ws } = getServerConfig();
 
 /**
  * WebSocket 管理 Hook
@@ -119,9 +110,7 @@ export interface UseWebSocketReturn {
  *   });
  * ```
  */
-export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
-  const { wsBaseUrl } = params;
-
+export function useWebSocket(): UseWebSocketReturn {
   /** WebSocket连接引用 */
   const wsRef = useRef<WebSocket | null>(null);
   /** WebSocket连接状态 */
@@ -209,26 +198,12 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
    */
   const connect = useCallback(
     (player: string, roomId: string): void => {
-      if (!player || !roomId) {
-        console.log(
-          `🔌 步骤1: 参数验证失败 - 玩家: "${player}", 房间: "${roomId}"`
+      if (!player || !roomId)
+        return console.log(
+          `🔌 参数验证失败 - 玩家: "${player}", 房间: "${roomId}"`
         );
-        return;
-      }
 
-      // 步骤2: 关闭现有连接（如果存在）
-      if (wsRef.current) {
-        console.log(`🔌 步骤2: 发现现有连接，正在关闭`);
-        wsRef.current.close();
-        console.log(`🔌 步骤2: 现有连接已关闭`);
-      } else {
-        console.log(`🔌 步骤2: 无现有连接，跳过关闭步骤`);
-      }
-
-      // 步骤3: 构造WebSocket URL并建立新连接
-      const wsUrl = `${wsBaseUrl}/ws`;
-
-      wsRef.current = new WebSocket(wsUrl);
+      wsRef.current = new WebSocket(ws);
 
       /**
        * WebSocket连接成功时的处理
@@ -241,7 +216,7 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
         if (wsRef.current) {
           // 步骤4.1: 构造身份验证数据
           const authData = {
-            player_name: player,
+            player_id: player,
             room_id: roomId,
           };
 
@@ -294,7 +269,7 @@ export function useWebSocket(params: UseWebSocketParams): UseWebSocketReturn {
         setConnected(false);
       };
     },
-    [wsBaseUrl, executeListeners]
+    [ws, executeListeners]
   );
 
   return {

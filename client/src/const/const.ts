@@ -3,16 +3,6 @@
  * 定义游戏的所有可能页面
  */
 export const GAME_UX_PAGEING = {
-  /** 初始状态 */
-  INITIAL: "initial",
-  /** 欢迎页面 */
-  USERNAME: "username",
-  /** 房间选择 */
-  ROOM_SELECTION: "room_selection",
-  /** 房间大厅 */
-  ROOM_LOBBY: "room_lobby",
-
-  /** ----------  下面是游戏中的状态 ---------- */
   /** 输入创业想法 */
   IDEA_INPUT: "idea_input",
   /** 角色选择 */

@@ -4,7 +4,6 @@ import { useGameState } from "./hooks/useGameState";
 import { useRoom } from "./hooks/useRoom";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useAudioManager } from "./utils/audioManager";
-import { getServerConfig } from "./utils/serverConfig";
 
 /**
  * 游戏提供者组件属性
@@ -13,9 +12,6 @@ interface GameProviderProps {
   /** 子组件 */
   children: ReactNode;
 }
-
-// 解构获取服务器配置
-const { http: API_BASE, ws: WS_BASE } = getServerConfig();
 
 /**
  * 游戏上下文提供者组件
@@ -26,14 +22,10 @@ export function GameProvider({ children }: GameProviderProps) {
   useAudioManager();
 
   // WebSocket 管理:
-  const webSocket = useWebSocket({
-    wsBaseUrl: WS_BASE,
-    httpBaseUrl: API_BASE,
-  });
+  const webSocket = useWebSocket();
 
   // API 管理
   const room = useRoom({
-    httpBaseUrl: API_BASE,
     connectWebSocket: webSocket.connect,
   });
 
@@ -41,7 +33,6 @@ export function GameProvider({ children }: GameProviderProps) {
   const gameState = useGameState({
     room,
     webSocket,
-    httpBaseUrl: API_BASE,
   });
 
   useEffect(() => {
