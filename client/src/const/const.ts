@@ -11,8 +11,6 @@ export const GAME_UX_PAGEING = {
   BACKGROUND_LOADING: "background_loading",
   /** 回合加载 */
   ROUND_LOADING: "round_loading",
-  /** 事件生成 */
-  EVENT_GENERATION: "event_generation",
   /** 游戏进行中 */
   PLAYING: "playing",
   /** 游戏结果 */

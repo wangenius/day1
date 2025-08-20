@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useGame } from "../context/GameContext";
+import { useGameState } from "../context/StateContext";
 import type { Player } from "../const/const";
 
 /**
@@ -32,17 +32,12 @@ interface RoleInfo {
  * 显示玩家角色信息和过渡动画
  */
 function GameLoadingPage() {
-  const { room, gameState } = useGame();
+  const { room, game } = useGameState();
   const [currentView, setCurrentView] = useState<CurrentView>("loading");
 
   // 添加调试日志
   console.log("GameLoadingPage - playerName:", room.player);
-  console.log("GameLoadingPage - roleDefinitions:", gameState.roleDefinitions);
-  console.log("GameLoadingPage - players:", room.room?.players);
-  console.log(
-    "GameLoadingPage - players详细:",
-    JSON.stringify(room.room?.players, null, 2)
-  );
+  console.log("GameLoadingPage - roleDefinitions:", game.state.roles);
 
   /**
    * 获取当前玩家的角色信息
@@ -52,7 +47,7 @@ function GameLoadingPage() {
     if (!room.player) return null;
 
     // 从players数组中找到当前玩家
-    const currentPlayer = room.room?.players.find(
+    const currentPlayer = room.state?.players.find(
       (player: Player) => player.name === room.player
     );
     if (!currentPlayer || !currentPlayer.name) return null;
@@ -62,11 +57,11 @@ function GameLoadingPage() {
     console.log("当前玩家角色ID:", roleId);
 
     // 若有角色定义，优先返回定义内容；否则使用基础回退信息
-    if (gameState.roleDefinitions && gameState.roleDefinitions[roleId]) {
+    if (game.state.roles && game.state.roles[roleId]) {
       return {
         id: roleId,
-        name: gameState.roleDefinitions?.[roleId].name || roleId,
-        description: gameState.roleDefinitions?.[roleId].description || "",
+        name: game.state.roles?.[roleId] || roleId,
+        description: game.state.roles?.[roleId] || "",
       };
     }
 

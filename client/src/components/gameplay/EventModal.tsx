@@ -1,10 +1,8 @@
-import ReactMarkdown from "react-markdown";
-
 interface EventModalProps {
   isOpen: boolean;
+  event: string;
   currentRound: number;
-  roundEvent: any;
-  gameBackground?: string | null;
+  background: string;
   onClose: () => void;
 }
 
@@ -13,12 +11,12 @@ interface EventModalProps {
  */
 export const EventModal = ({
   isOpen,
+  event,
   currentRound,
-  roundEvent,
-  gameBackground,
+  background,
   onClose,
 }: EventModalProps) => {
-  if (!isOpen || !roundEvent) {
+  if (!isOpen || !event) {
     return null;
   }
 
@@ -71,7 +69,7 @@ export const EventModal = ({
             {/* 内容 */}
             <div className="relative z-10">
               <div className="text-white text-lg font-normal font-['Cactus_Classical_Serif'] leading-relaxed text-center mb-6">
-                {roundEvent.event_description}
+                {event}
               </div>
 
               {/* 底部装饰线 */}
@@ -91,7 +89,7 @@ export const EventModal = ({
         </div>
 
         {/* 创业背景信息区域 */}
-        {gameBackground && (
+        {background && (
           <div className="px-8 pb-8">
             <div className="bg-gradient-to-b from-blue-900/30 to-blue-950/50 rounded-xl p-4 border border-blue-700/30 backdrop-blur-sm max-h-64 overflow-y-auto">
               <div className="flex items-center gap-2 mb-3">
@@ -102,8 +100,10 @@ export const EventModal = ({
               </div>
 
               <div className="text-sm text-gray-300 font-['Cactus_Classical_Serif'] markdown-content">
-                {gameBackground.split("\n").map((line, index) => (
-                  <div key={index} className="mb-2">{line}</div>
+                {background.split("\n").map((line, index) => (
+                  <div key={index} className="mb-2">
+                    {line}
+                  </div>
                 ))}
               </div>
             </div>

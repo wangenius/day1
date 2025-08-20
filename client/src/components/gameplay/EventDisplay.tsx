@@ -1,34 +1,29 @@
-import { PlayerInfo } from './PlayerInfo';
-
-interface EventDisplayProps {
-  playerName: string;
-  playerRole: string;
-  currentRound: number;
-  roundEvent: any;
-  getRoleImage: (role: string) => string;
-  onShowEventModal: () => void;
-  remaining?: number;
-}
+import { useGameState } from "@/context/StateContext";
+import { PlayerInfo } from "./PlayerInfo";
 
 /**
  * 1. 展示事件阶段组件
  */
 export const EventDisplay = ({
-  playerName,
-  playerRole,
-  currentRound,
-  roundEvent,
-  getRoleImage,
   onShowEventModal,
-  remaining
-}: EventDisplayProps) => {
+  onShowPrivateModal,
+}: {
+  onShowEventModal: () => void;
+  onShowPrivateModal: () => void;
+}) => {
+  const { game, room } = useGameState();
+
+  const getRoleImage = (role: string): string => {
+    return `/image (${role.toUpperCase()}).png`;
+  };
+
   return (
     <div className="flex-1 w-full bg-stone-950 overflow-hidden flex flex-col p-4">
       {/* 顶部玩家信息区域 */}
       <div className="flex justify-center pt-4 pb-6">
         <PlayerInfo
-          playerName={playerName}
-          playerRole={playerRole}
+          playerName={room.player}
+          playerRole={game.state.roles[room.player]}
           getRoleImage={getRoleImage}
         />
       </div>
@@ -39,16 +34,24 @@ export const EventDisplay = ({
           <div className="text-center mb-6">
             <div
               className="inline-block px-6 py-3 bg-amber-600/20 rounded-full border border-amber-500/30 cursor-pointer hover:bg-amber-600/30 hover:border-amber-500/50 transition-all duration-200"
-              onClick={onShowEventModal}
+              onClick={() => {
+                onShowEventModal();
+              }}
             >
               <span className="text-amber-300 text-lg font-normal font-['Cactus_Classical_Serif'] uppercase">
-                第{currentRound}阶段 {typeof remaining === 'number' ? `· ${remaining}s` : ''}
+                第{game.state.current_round}阶段{" "}
+                {typeof game.state.rounds[game.state.current_round]
+                  .phase_remain === "number"
+                  ? `· ${
+                      game.state.rounds[game.state.current_round].phase_remain
+                    }s`
+                  : ""}
               </span>
             </div>
           </div>
 
           <div className="text-white text-lg font-normal font-['Cactus_Classical_Serif'] leading-relaxed text-center">
-            {roundEvent?.event_description || (
+            {game.state.rounds[game.state.current_round].situation || (
               <div className="flex items-center justify-center gap-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                 <span>事件加载中...</span>

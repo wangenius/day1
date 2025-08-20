@@ -24,7 +24,7 @@ export type RoomState =
  */
 export interface UseRoomReturn {
   player: string;
-  room: RoomInfo | null;
+  state: RoomInfo;
   roomList: RoomInfo[];
   loadingRoomList: boolean;
   roomState: RoomState;
@@ -62,6 +62,11 @@ export interface UseRoomReturn {
    * @param state - 房间状态
    */
   setRoomState: (state: RoomState) => void;
+
+  /**
+   * 开始游戏
+   */
+  startGame: () => void;
 }
 
 const { http } = getServerConfig();
@@ -78,7 +83,11 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
   const { webSocket } = params;
 
   const [roomList, setRoomList] = useState<RoomInfo[]>([]);
-  const [room, setRoom] = useState<RoomInfo | null>(null);
+  const [state, setState] = useState<RoomInfo>({
+    id: "",
+    state: "waiting",
+    players: [],
+  });
   const [loadingRoomList, setLoadingRoomList] = useState<boolean>(false);
   const [roomState, setRoomState] = useState<RoomState>("landing_page");
   /** 当前玩家名称 */
@@ -86,19 +95,6 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
 
   /**
    * 获取房间列表
-   *
-   * 向服务器发起 GET 请求获取当前所有在线房间的信息，
-   * 包括房间ID、玩家数量、游戏状态等。会自动处理加载状态、
-   * 错误处理和数据格式转换。
-   *
-   * 执行流程：
-   * 1. 设置加载状态为 true
-   * 2. 发起 HTTP GET 请求到 /rooms 接口
-   * 3. 解析响应数据并规范化格式
-   * 4. 更新房间列表状态
-   * 5. 显示操作结果消息
-   * 6. 重置加载状态
-   *
    * @throws {Error} 当网络请求失败或服务器返回错误时抛出异常
    */
   const list = useCallback(async (): Promise<void> => {
@@ -128,19 +124,6 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
 
   /**
    * 处理房间操作（创建或加入房间）
-   *
-   * 向服务器发送加入房间的请求。当前版本主要处理加入房间的场景，
-   * 创建房间逻辑在后端自动处理（房间不存在时自动创建）。
-   *
-   * 执行流程：
-   * 1. 构造请求参数（房间ID和玩家ID）
-   * 2. 发送 POST 请求到 /rooms/join 接口
-   * 3. 处理服务器响应
-   * 4. 根据成功/失败状态显示相应消息
-   * 5. 成功时交由调用方处理后续逻辑（如建立WebSocket连接）
-   *
-   * @param roomId - 目标房间的唯一标识符
-   * @throws {Error} 当加入房间失败时抛出异常，包含具体的错误信息
    */
   const join = useCallback(
     async (roomId: string): Promise<void> => {
@@ -189,7 +172,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
     try {
       const apiUrl = `${http}/rooms/leave`;
       const requestBody = {
-        room_id: room?.id,
+        room_id: state?.id,
         player_id: player,
       };
 
@@ -258,9 +241,9 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
 
   const update = useCallback(
     (room: RoomInfo) => {
-      setRoom(room);
+      setState(room);
     },
-    [setRoom]
+    [setState]
   );
 
   const playerSet = useCallback(
@@ -270,6 +253,19 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
     },
     [setPlayer]
   );
+
+  const startGame = useCallback(() => {
+    if (!state) {
+      return;
+    }
+    webSocket.send({
+      type: "start_game",
+      data: {
+        room_id: state.id,
+        player_id: player,
+      },
+    });
+  }, [webSocket]);
 
   /**
    * 从localStorage 加载玩家名称, 并请求重新连接
@@ -299,7 +295,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
           } else {
             setRoomState("playing");
           }
-          setRoom({
+          setState({
             id: data.room_id,
             state: data.room_state as "waiting" | "playing",
             players: data.players,
@@ -309,7 +305,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
           const data = message.data as {
             players: any[];
           };
-          setRoom((prev) => {
+          setState((prev) => {
             if (prev) {
               return { ...prev, players: data.players };
             }
@@ -322,7 +318,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
 
   return {
     player,
-    room,
+    state,
     roomList,
     loadingRoomList,
     roomState,
@@ -333,5 +329,6 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
     reconnect,
     update,
     setRoomState,
+    startGame,
   };
 }

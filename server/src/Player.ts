@@ -269,25 +269,14 @@ export class Player implements PlayerInfo {
     type: string,
     data: any
   ) {
-    /**
-     * ========== 12.2：消息路由表 - 基于消息类型的动态分发系统 ==========
-     *
-     * 每个路由处理器的职责：
-     * - startup_idea: 处理创业想法提交，触发想法收集完成检查
-     * - start_game: 处理游戏开始请求，仅房主可操作
-     * - select_role: 处理角色选择，检查角色冲突和完成度
-     * - game_action: 处理游戏内玩家行动，推进游戏流程
-     * - restart_game: 处理游戏重启，重置所有游戏状态
-     * - leave_room: 处理主动退出，清理玩家数据和连接
-     */
+    console.log(room.id, player_id, type, data);
+
     const router: Record<string, (payload: any) => Promise<void>> = {
+      // 游戏开始路由：触发游戏开始流程（仅房主可操作）
+      start_game: async () => room.game.handle_start_game(player_id),
       // 创业想法提交路由：将玩家的创业想法转发给游戏逻辑处理
       startup_idea: async (payload) =>
         room.game.handle_startup_idea(player_id, payload?.idea),
-
-      // 游戏开始路由：触发游戏开始流程（仅房主可操作）
-      start_game: async () => room.game.handle_start_game(player_id),
-
       // 角色选择路由：处理玩家角色选择，检查冲突和完成度
       select_role: async (payload) =>
         room.game.handle_role_selection(player_id, payload?.role),

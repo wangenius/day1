@@ -1,6 +1,6 @@
-import { ReactNode, useEffect } from "react";
-import { GameContext } from "./GameContext";
-import { useGameState } from "./hooks/useGameState";
+import { ReactNode } from "react";
+import { GameContext } from "./StateContext";
+import { useGame } from "./hooks/useGame";
 import { useRoom } from "./hooks/useRoom";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useAudioManager } from "./utils/audioManager";
@@ -17,7 +17,7 @@ interface GameProviderProps {
  * 游戏上下文提供者组件
  * 管理整个游戏的状态和逻辑，为所有子组件提供游戏相关的数据和方法
  */
-export function GameProvider({ children }: GameProviderProps) {
+export function StateProvider({ children }: GameProviderProps) {
   // 背景音乐管理:
   useAudioManager();
 
@@ -25,21 +25,10 @@ export function GameProvider({ children }: GameProviderProps) {
   const webSocket = useWebSocket();
 
   // API 管理
-  const room = useRoom({
-    webSocket,
-  });
+  const room = useRoom({ webSocket });
 
   // 游戏状态管理:
-  const gameState = useGameState({
-    room,
-    webSocket,
-  });
-
-  useEffect(() => {
-    console.log("gameState", gameState);
-  }, [gameState]);
-
-  // ==================== Context值对象 ====================
+  const game = useGame({ room, webSocket });
 
   /**
    * 提供给子组件的Context值
@@ -47,7 +36,7 @@ export function GameProvider({ children }: GameProviderProps) {
    */
   const value = {
     room,
-    gameState,
+    game,
     webSocket,
   };
 

@@ -7,5 +7,17 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173
+  },
+  resolve: {
+    alias: {
+      '@': '/src',
+      '@components': '/src/components',
+      '@const': '/src/const',
+      '@context': '/src/context',
+      '@types': '/src/types',
+      '@assets': '/src/assets',
+      '@utils': '/src/context/utils',
+      '@hooks': '/src/context/hooks',
+    }
   }
 })

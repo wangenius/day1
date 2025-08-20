@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import type { GameResult as GameResultType } from "../const/const";
-import { useGame } from "../context/GameContext";
+import { useGameState } from "../context/StateContext";
 
 /**
  * 打印机效果组件属性
@@ -24,11 +24,11 @@ interface PrinterEffectProps {
  * 显示游戏结束后的结果和打印效果
  */
 function GameResult() {
-  const { gameState } = useGame();
+  const { game } = useGameState();
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [printProgress, setPrintProgress] = useState<number>(0);
 
-  console.log(gameState.gameResult);
+  console.log(game.state.result);
 
   useEffect(() => {
     // 5秒后开始打印动画
@@ -69,7 +69,7 @@ function GameResult() {
   const handleRestart = (): void => {
     setIsPrinting(false);
     setPrintProgress(0);
-    gameState.handleRestartGame();
+    game.handleRestartGame();
   };
 
   return (
@@ -79,7 +79,7 @@ function GameResult() {
         printProgress={printProgress}
         onStartPrint={handleStartPrint}
         onRestart={handleRestart}
-        gameResult={gameState.gameResult}
+        gameResult={game.state.result}
       />
     </div>
   );
@@ -187,13 +187,19 @@ function PrinterEffect({
                   <ReactMarkdown
                     components={{
                       h1: ({ children }) => (
-                        <h1 className="text-xl font-bold text-primary mb-3">{children}</h1>
+                        <h1 className="text-xl font-bold text-primary mb-3">
+                          {children}
+                        </h1>
                       ),
                       h2: ({ children }) => (
-                        <h2 className="text-lg font-semibold text-primary mb-2">{children}</h2>
+                        <h2 className="text-lg font-semibold text-primary mb-2">
+                          {children}
+                        </h2>
                       ),
                       h3: ({ children }) => (
-                        <h3 className="text-base font-medium text-primary mb-2">{children}</h3>
+                        <h3 className="text-base font-medium text-primary mb-2">
+                          {children}
+                        </h3>
                       ),
                       p: ({ children }) => (
                         <p className="mb-3 leading-relaxed">{children}</p>
@@ -202,10 +208,14 @@ function PrinterEffect({
                         <ul className="mb-3 pl-4 space-y-1">{children}</ul>
                       ),
                       ol: ({ children }) => (
-                        <ol className="mb-3 pl-4 space-y-1 list-decimal">{children}</ol>
+                        <ol className="mb-3 pl-4 space-y-1 list-decimal">
+                          {children}
+                        </ol>
                       ),
                       li: ({ children }) => (
-                        <li className="text-zinc-700 leading-relaxed">{children}</li>
+                        <li className="text-zinc-700 leading-relaxed">
+                          {children}
+                        </li>
                       ),
                       strong: ({ children }) => (
                         <strong className="font-semibold">{children}</strong>

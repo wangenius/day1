@@ -1,11 +1,11 @@
-import { useGame } from "../context/GameContext";
+import { useGameState } from "../context/StateContext";
 
 /**
  * 初始页面组件
  * 游戏的启动页面，点击任意位置进入欢迎页面
  */
 export function InitialPage() {
-  const { room } = useGame();
+  const { room } = useGameState();
 
   return (
     <div

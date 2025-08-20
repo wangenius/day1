@@ -1,40 +1,30 @@
+import { useGameState } from "../../context/StateContext";
 import { PlayerInfo } from "./PlayerInfo";
 import { PrivateInfo } from "./PrivateInfo";
 
 interface InfoAndOptionsProps {
-  playerName: string;
-  playerRole: string;
-  currentRound: number;
-  roundEvent: any;
-  privateMessages: Record<string, string>;
-  getRoleImage: (role: string) => string;
   onShowEventModal: () => void;
   onShowPrivateModal: () => void;
-  onGoToSelection: () => void;
 }
 
-/**
- * 2. 展示信息和选项阶段组件
- */
 export const InfoAndOptions = ({
-  playerName,
-  playerRole,
-  currentRound,
-  roundEvent,
-  privateMessages,
-  getRoleImage,
   onShowEventModal,
   onShowPrivateModal,
-  onGoToSelection,
 }: InfoAndOptionsProps) => {
+  const { game, room } = useGameState();
+
+  const getRoleImage = (role: string): string => {
+    return `/image (${role.toUpperCase()}).png`;
+  };
+
   return (
     <div className="flex-1 w-full bg-stone-950 overflow-hidden flex flex-col p-4">
       {/* 顶部玩家信息和阶段标题 */}
       <div className="flex flex-col items-center pt-4 pb-6">
         <div className="mb-4">
           <PlayerInfo
-            playerName={playerName}
-            playerRole={playerRole}
+            playerName={room.player}
+            playerRole={game.state.roles[room.player]}
             getRoleImage={getRoleImage}
             size="medium"
           />
@@ -44,14 +34,16 @@ export const InfoAndOptions = ({
           className="opacity-60 text-white text-lg font-normal font-['Cactus_Classical_Serif'] uppercase cursor-pointer hover:opacity-80 transition-opacity duration-200"
           onClick={onShowEventModal}
         >
-          第{currentRound}阶段
+          第{game.state.current_round}阶段
         </div>
       </div>
 
       {/* 私人信息 */}
       <PrivateInfo
-        privateMessages={privateMessages}
-        playerRole={playerRole}
+        privateMessages={
+          game.state.rounds[game.state.current_round].private_messages
+        }
+        playerRole={game.state.roles[room.player]}
         onShowPrivateModal={onShowPrivateModal}
       />
 
@@ -65,8 +57,10 @@ export const InfoAndOptions = ({
       {/* 选项展示 */}
       <div className="flex-1 px-4">
         <div className="max-w-sm mx-auto space-y-4">
-          {roundEvent?.decision_options ? (
-            Object.entries(roundEvent.decision_options).map(([key, action]) => (
+          {game.state.rounds[game.state.current_round].decision_options ? (
+            Object.entries(
+              game.state.rounds[game.state.current_round].decision_options
+            ).map(([key, action]) => (
               <div
                 key={key}
                 className="w-full h-16 px-6 py-3 bg-neutral-700 rounded-lg flex items-center justify-center"
@@ -86,7 +80,7 @@ export const InfoAndOptions = ({
       <div className="flex flex-col items-center pb-8">
         <div
           className="cursor-pointer flex flex-col items-center gap-2 hover:opacity-80 transition-opacity"
-          onClick={onGoToSelection}
+          onClick={onShowEventModal}
         >
           <div className="text-white/70 text-base font-normal font-['Cactus_Classical_Serif']">
             进入选择

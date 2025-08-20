@@ -573,7 +573,6 @@ export class Game {
       final_score,
       success_level,
       metrics: { user_growth, revenue, market_share, team_size },
-      achievements: this._generateAchievements(final_score),
       timeline: this._generateTimeline(),
       player_performance,
       playerScores,
@@ -763,6 +762,7 @@ export class Game {
   async handle_start_game(player_name: string) {
     const player = this.room.get_player(player_name);
     if (!player || !player.is_host) return;
+    console.log(this.room.state, RoomState.WAITING);
     if (this.room.state !== RoomState.WAITING) return;
     await this.room.broadcast({
       type: "game_state",
@@ -943,6 +943,7 @@ export class Game {
    * @param action_data 行动数据，包含action字段
    */
   async handle_game_action(player_name: string, action_data: any) {
+    console.log(player_name, action_data);
     const player = this.room.get_player(player_name);
     if (!player || this.room.state !== RoomState.PLAYING) return;
     const gameInfo = this.gameInfo;

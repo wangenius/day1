@@ -1,11 +1,11 @@
-import { useGame } from "../../context/GameContext";
+import { useGameState } from "../../context/StateContext";
 import { Button } from "../Button";
 
 export function RoomLobby() {
-  const { room } = useGame();
+  const { room } = useGameState();
 
   // 获取当前玩家信息
-  const currentPlayer = room.room?.players.find((p) => p.name === room.player);
+  const currentPlayer = room.state?.players.find((p) => p.name === room.player);
   const isHost = currentPlayer?.is_host || false;
 
   return (
@@ -47,17 +47,17 @@ export function RoomLobby() {
               房间号
             </div>
             <div className="text-white text-2xl font-medium font-['Space_Grotesk']">
-              {room.room?.id}
+              {room.state?.id}
             </div>
           </div>
 
           {/* 玩家列表 */}
           <div className="mb-6">
             <div className="text-white/70 text-sm font-normal font-['Cactus_Classical_Serif'] mb-3">
-              在线玩家 ({room.room?.players.length}/4)
+              在线玩家 ({room.state?.players.length}/4)
             </div>
             <div className="space-y-2">
-              {room.room?.players.map((player, index) => (
+              {room.state?.players.map((player, index) => (
                 <div
                   key={index}
                   className={`flex items-center justify-between p-3 rounded-lg border ${
@@ -94,7 +94,7 @@ export function RoomLobby() {
             {isHost ? (
               <Button
                 onClick={() => {
-                  // gameState.start();
+                  room.startGame();
                 }}
               >
                 开始游戏

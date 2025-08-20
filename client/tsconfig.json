@@ -23,7 +23,14 @@
     /* Path mapping */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@components/*": ["./src/components/*"],
+      "@const/*": ["./src/const/*"],
+      "@context/*": ["./src/context/*"],
+      "@types/*": ["./src/types/*"],
+      "@assets/*": ["./src/assets/*"],
+      "@utils/*": ["./src/context/utils/*"],
+      "@hooks/*": ["./src/context/hooks/*"]
     }
   },
   "include": ["src"]

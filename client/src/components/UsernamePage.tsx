@@ -1,5 +1,5 @@
 import { useState, FormEvent } from "react";
-import { useGame } from "../context/GameContext";
+import { useGameState } from "../context/StateContext";
 import { Button } from "./Button";
 
 /**
@@ -7,7 +7,7 @@ import { Button } from "./Button";
  * 用户输入用户名的页面
  */
 function UserNamePage() {
-  const { room } = useGame();
+  const { room } = useGameState();
   const [playerName, setPlayerName] = useState<string>("");
 
   /**

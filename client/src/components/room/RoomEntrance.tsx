@@ -1,5 +1,5 @@
 import { useState, useRef, KeyboardEvent, useEffect } from "react";
-import { useGame } from "../../context/GameContext";
+import { useGameState } from "../../context/StateContext";
 import { Button } from "../Button";
 import { RoomInfo } from "@/const/const";
 
@@ -8,7 +8,7 @@ import { RoomInfo } from "@/const/const";
  * 用户输入团队暗号加入房间的页面
  */
 function RoomEntrance() {
-  const { room } = useGame();
+  const { room } = useGameState();
   const [teamCode, setTeamCode] = useState<string[]>(["", "", "", ""]);
   const [loading, setLoading] = useState<boolean>(false);
   const [showRoomList, setShowRoomList] = useState<boolean>(false);

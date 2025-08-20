@@ -1,13 +1,13 @@
 import { useState, FormEvent } from "react";
 import { Button } from "../Button";
-import { useGame } from "../../context/GameContext";
+import { useGameState } from "../../context/StateContext";
 
 /**
  * 游戏大厅组件
  * 用户输入创业想法的页面
  */
 function IdeaPickerInRoom() {
-  const { room, gameState } = useGame();
+  const { room, game: gameState } = useGameState();
   const handleSubmit = gameState.handleStartupIdeaSubmit;
   const [startupIdea, setStartupIdea] = useState<string>("");
   const [ideaSubmitted, setIdeaSubmitted] = useState<boolean>(false);
@@ -53,17 +53,16 @@ function IdeaPickerInRoom() {
   return (
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden flex flex-col justify-center p-6 relative">
       {/* 房间信息 */}
-      <div className="absolute top-4 right-4 text-right">
+      <div className="absolute left-4 right-4 top-4 flex justify-between">
         {/* 房间号 */}
         <div className="text-white/70 text-sm font-normal font-['Cactus_Classical_Serif'] mb-2">
-          房间号: <span className="text-white">{room.room?.id}</span>
+          房间号: <span className="text-white">{room.state?.id}</span>
         </div>
 
         {/* 玩家列表 */}
         <div className="text-white/70 text-sm font-normal font-['Cactus_Classical_Serif']">
-          <div className="mb-1">在线玩家 ({room.room?.players.length}):</div>
           <div className="space-y-1">
-            {room.room?.players.map((player, index) => (
+            {room.state?.players.map((player, index) => (
               <div key={index} className="flex items-center justify-end gap-2">
                 <span className="text-white">{player.name}</span>
                 <div className="flex items-center gap-1">

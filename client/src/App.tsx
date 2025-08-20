@@ -1,19 +1,17 @@
-import EventGeneration from "./components/EventGeneration";
 import GameLoadingPage from "./components/GameLoadingPage";
-import IdeaPickerInRoom from "./components/room/IdeaPickerInRoom";
 import GamePlay from "./components/gameplay/GamePlay";
 import GameResult from "./components/GameResult";
 import { InitialPage } from "./components/InitialPage";
 import RoleSelection from "./components/roleSelection/RoleSelection";
+import IdeaPickerInRoom from "./components/room/IdeaPickerInRoom";
 import RoomEntrance from "./components/room/RoomEntrance";
+import { RoomLobby } from "./components/room/RoomLobby";
 import RoundLoadingPage from "./components/RoundLoadingPage";
 import UserNamePage from "./components/UsernamePage";
-import { GAME_UX_PAGEING } from "./const/const";
-import { useGame } from "./context/GameContext";
-import { RoomLobby } from "./components/room/RoomLobby";
+import { useGameState } from "./context/StateContext";
 
 function App() {
-  const { room, gameState } = useGame();
+  const { room, game } = useGameState();
 
   const renderCurrentState = () => {
     switch (room.roomState) {
@@ -26,24 +24,25 @@ function App() {
       case "waiting":
         return <RoomLobby />;
     }
-    switch (gameState.gameState) {
-      case GAME_UX_PAGEING.IDEA_INPUT:
+    if (game.state.state === "playing") {
+      if (Object.keys(game.state.ideas).length < room.state.players.length) {
         return <IdeaPickerInRoom />;
-      case GAME_UX_PAGEING.ROLE_SELECTION:
+      }
+      if (Object.keys(game.state.roles).length < room.state.players.length) {
         return <RoleSelection />;
-      case GAME_UX_PAGEING.BACKGROUND_LOADING:
+      }
+      if (game.state.background === "") {
         return <GameLoadingPage />;
-      case GAME_UX_PAGEING.ROUND_LOADING:
+      }
+      if (
+        game.state.rounds[game.state.current_round] === undefined ||
+        game.state.rounds[game.state.current_round].phase_remain === 0
+      ) {
         return <RoundLoadingPage />;
-      case GAME_UX_PAGEING.EVENT_GENERATION:
-        return <EventGeneration />;
-      case GAME_UX_PAGEING.PLAYING:
-        return <GamePlay />;
-      case GAME_UX_PAGEING.RESULT:
-        return <GameResult />;
-      default:
-        return <UserNamePage />;
+      }
+      return <GamePlay />;
     }
+    return <GameResult />;
   };
 
   return (

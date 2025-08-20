@@ -1,101 +1,55 @@
+import { useState } from "react";
+import { useGameState } from "../../context/StateContext";
 import { Button } from "../Button";
 import { PlayerStatusCard } from "./PlayerStatusCard";
 import { PrivateInfo } from "./PrivateInfo";
 
 interface SelectionProps {
-  playerName: string;
-  playerRole: string;
-  currentRound: number;
-  roundEvent: any;
-  privateMessages: Record<string, string>;
-  selectedAction: string;
-  hasSubmitted: boolean;
-  waitingForPlayers: boolean;
-  players: any[];
-  playerActions: any[];
-  getRoleImage: (role: string) => string;
   onShowEventModal: () => void;
   onShowPrivateModal: () => void;
-  onSelectAction: (action: string) => void;
-  onSubmitAction: () => void;
 }
 
 /**
  * 4. 选择确认阶段组件
  */
-export const Selection = ({
-  playerName,
-  playerRole,
-  currentRound,
-  roundEvent,
-  privateMessages,
-  selectedAction,
-  hasSubmitted,
-  waitingForPlayers,
-  players,
-  playerActions,
-  getRoleImage,
-  onShowPrivateModal,
-  onSelectAction,
-  onSubmitAction,
-}: SelectionProps) => {
-  // 调试信息
-  console.log("Selection组件数据:", {
-    players,
-    playerActions,
-    currentRound,
-    playerName,
-  });
+export const Selection = ({ onShowPrivateModal }: SelectionProps) => {
+  const { game, room } = useGameState();
+  const [selectedAction, setSelectedAction] = useState<string>("");
+
+  const hasPlayerSubmitted =
+    !!game.state.rounds[game.state.current_round].player_actions[room.player];
+
+  const getRoleImage = (role: string): string => {
+    return `/image (${role.toUpperCase()}).png`;
+  };
 
   return (
     <div className="flex-1 w-full bg-stone-950 overflow-hidden flex flex-col p-4">
       {/* 所有玩家选择状态 */}
-      {players && players.length > 0 && (
+      {room.state.players && room.state.players.length > 0 && (
         <div className="mb-8">
           {/* 玩家状态 */}
           <div className="flex justify-center">
             <div className="flex gap-6">
               {/* 将玩家按当前玩家优先排序 */}
-              {[...players]
+              {[...room.state.players]
                 .sort((a, b) => {
-                  const aIsCurrent = a.name === playerName;
-                  const bIsCurrent = b.name === playerName;
+                  const aIsCurrent = a.name === room.player;
+                  const bIsCurrent = b.name === room.player;
                   if (aIsCurrent && !bIsCurrent) return -1;
                   if (!aIsCurrent && bIsCurrent) return 1;
                   return 0;
                 })
                 .map((player) => {
-                  const hasPlayerSubmitted = playerActions?.some(
-                    (action) =>
-                      action.playerName === player.name &&
-                      action.round === currentRound
-                  );
-                  const isCurrentPlayer = player.name === playerName;
-
-                  console.log(
-                    `玩家 ${player.name} 提交状态:`,
-                    hasPlayerSubmitted,
-                    {
-                      playerActions,
-                      currentRound,
-                      playerName: player.name,
-                      isCurrentPlayer,
-                      matchingActions: playerActions?.filter(
-                        (action) => action.playerName === player.name
-                      ),
-                      allPlayerNames: playerActions?.map(
-                        (action) => action.playerName
-                      ),
-                      actionRounds: playerActions?.map(
-                        (action) => action.round
-                      ),
-                    }
-                  );
+                  const isCurrentPlayer = player.name === room.player;
 
                   return (
                     <PlayerStatusCard
                       key={player.name}
-                      player={player}
+                      player={{
+                        name: player.name,
+                        role: game.state.roles[player.name] || "",
+                      }}
                       isCurrentPlayer={isCurrentPlayer}
                       hasSubmitted={hasPlayerSubmitted}
                       getRoleImage={getRoleImage}
@@ -108,13 +62,18 @@ export const Selection = ({
       )}
 
       {/* 私人信息 - 全宽度，用户头像在右上角 */}
-      {privateMessages && privateMessages[String(playerRole).toUpperCase()] && (
-        <PrivateInfo
-          privateMessages={privateMessages}
-          playerRole={playerRole}
-          onShowPrivateModal={onShowPrivateModal}
-        />
-      )}
+      {game.state.rounds[game.state.current_round].private_messages &&
+        game.state.rounds[game.state.current_round].private_messages[
+          String(game.state.roles[room.player]).toUpperCase()
+        ] && (
+          <PrivateInfo
+            privateMessages={
+              game.state.rounds[game.state.current_round].private_messages
+            }
+            playerRole={game.state.roles[room.player]}
+            onShowPrivateModal={onShowPrivateModal}
+          />
+        )}
 
       {/* 选择提示 */}
       <div className="text-center mb-8">
@@ -126,14 +85,16 @@ export const Selection = ({
       {/* 选择选项 */}
       <div className="flex-1 px-4 mb-6">
         <div className="flex flex-col gap-4 max-w-sm mx-auto">
-          {roundEvent?.decision_options ? (
-            Object.entries(roundEvent.decision_options).map(([key, action]) => (
+          {game.state.rounds[game.state.current_round].decision_options ? (
+            Object.entries(
+              game.state.rounds[game.state.current_round].decision_options
+            ).map(([key, action]) => (
               <div
                 key={key}
                 className={`h-16 px-6 py-2.5 rounded-md flex items-center justify-center cursor-pointer transition-all ${
                   selectedAction === key ? "bg-white" : "bg-neutral-700"
                 }`}
-                onClick={() => onSelectAction(key)}
+                onClick={() => setSelectedAction(key)}
               >
                 <div
                   className={`text-center text-lg font-normal font-['Cactus_Classical_Serif'] leading-tight ${
@@ -152,18 +113,20 @@ export const Selection = ({
 
       {/* 底部按钮和倒计时 */}
       <div className="flex flex-col items-center pb-8 space-y-4">
-        {!hasSubmitted ? (
-          <Button onClick={onSubmitAction}>确认</Button>
+        {!hasPlayerSubmitted ? (
+          <Button onClick={() => game.handleRoundAction(selectedAction)}>
+            确认
+          </Button>
         ) : (
           <div className="text-center">
             <div className="text-green-400 text-xl font-bold mb-2">
               ✅ 已提交选择
             </div>
-            {waitingForPlayers && currentRound < 5 ? (
+            {game.state.current_round < 5 ? (
               <div className="text-white">等待其他玩家...</div>
             ) : (
               <div className="text-white">
-                {currentRound >= 5
+                {game.state.current_round >= 5
                   ? "等待生成最终结果..."
                   : "所有玩家已提交，正在进入下一轮..."}
               </div>
