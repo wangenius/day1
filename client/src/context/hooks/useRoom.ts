@@ -285,7 +285,7 @@ export function useRoom(params: UseRoomParams): UseRoomReturn {
   useEffect(() => {
     if (webSocket.connected) {
       webSocket.listen((message) => {
-        if (message.type === "connection_success") {
+        if (message.type === "success") {
           const data = message.data as {
             room_id: string;
             player_id: string;
