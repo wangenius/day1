@@ -12,19 +12,11 @@ export const EventDisplay = ({
 }) => {
   const { game, room } = useGameState();
 
-  const getRoleImage = (role: string): string => {
-    return `/image (${role.toUpperCase()}).png`;
-  };
-
   return (
     <div className="flex-1 w-full bg-stone-950 overflow-hidden flex flex-col p-4">
       {/* 顶部玩家信息区域 */}
       <div className="flex justify-center pt-4 pb-6">
-        <PlayerInfo
-          playerName={room.player}
-          playerRole={game.state.roles[room.player]}
-          getRoleImage={getRoleImage}
-        />
+        <PlayerInfo playerName={room.player} />
       </div>
 
       {/* 事件信息区域 */}

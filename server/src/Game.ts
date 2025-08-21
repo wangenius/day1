@@ -2,11 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { Room } from "./Room.js";
 import {
-  GameInfo,
   GameState,
+  GameStatus,
   RoleEnum,
-  RoomState,
-  RoundInfo,
+  RoomStatus,
+  RoundState,
 } from "./types/types.js";
 import { LLM } from "./utils/llm.js";
 import { logger } from "./utils/logger.js";
@@ -26,7 +26,6 @@ const P4 = readPrompt("prompt4.txt");
 
 /**
  * AI生成事件的数据结构
- *
  * 用于定义LLM生成的游戏事件格式：
  * - situation: 当前轮次的情况描述
  * - event: 具体的事件内容和决策选项
@@ -41,7 +40,6 @@ interface GeneratedEvent {
     decision_options: Record<string, string>;
   };
   private_messages: Record<string, string>;
-  is_default_event?: boolean;
 }
 
 /**
@@ -56,16 +54,16 @@ interface GeneratedEvent {
  *
  * @returns 初始化的游戏信息对象
  */
-function createDefaultGameInfo(): GameInfo {
+function createDefaultGameInfo(): GameState {
   return {
-    state: GameState.PLAYING,
+    state: GameStatus.PLAYING,
     result: { report: "" },
-    ideas: {}, // 玩家名 -> 创业想法
-    selected_idea: "", // 选中的创业想法
-    roles: {}, // 玩家名 -> 角色
-    background: "", // AI生成的背景故事
-    rounds: {}, // 轮次号 -> 轮次信息
-    current_round: 1, // 当前轮次
+    ideas: {},
+    selected_idea: "",
+    roles: {},
+    background: "",
+    rounds: {},
+    current_round: 1,
   };
 }
 
@@ -94,7 +92,7 @@ function createDefaultGameInfo(): GameInfo {
  */
 export class Game {
   /** 游戏状态数据 - 包含所有游戏相关信息 */
-  gameInfo: GameInfo;
+  state: GameState;
 
   /** 关联的房间实例 - 用于消息广播和玩家管理 */
   room: Room;
@@ -115,13 +113,13 @@ export class Game {
    */
   constructor(room: Room) {
     this.room = room;
-    this.gameInfo = createDefaultGameInfo();
+    this.state = createDefaultGameInfo();
   }
   private _taskKey(roomId: string, round: number) {
     return `${roomId}:${round}`;
   }
   private _buildPreviousExperience(upToRound: number) {
-    const gameInfo = this.gameInfo;
+    const gameInfo = this.state;
     if (upToRound <= 1) return "";
     const parts: string[] = [];
     for (let r = 1; r < upToRound; r++) {
@@ -159,7 +157,7 @@ export class Game {
   }
 
   private _allPlayersSubmitted(round_num: number) {
-    const roundInfo = this.gameInfo.rounds[round_num];
+    const roundInfo = this.state.rounds[round_num];
     if (!roundInfo) return false;
     const online = this.room.get_online_players();
     const submitted = Object.keys(roundInfo.player_actions);
@@ -171,7 +169,7 @@ export class Game {
     player_name: string,
     action: string
   ) {
-    const gameInfo = this.gameInfo;
+    const gameInfo = this.state;
     if (!gameInfo.rounds[round_num]) {
       gameInfo.rounds[round_num] = {
         situation: "",
@@ -184,25 +182,9 @@ export class Game {
     gameInfo.rounds[round_num].player_actions[player_name] = action;
   }
 
-  private _getRoundInfo(round_num: number) {
-    const roundInfo = this.gameInfo.rounds[round_num];
-    return roundInfo?.situation || "";
-  }
-
-  private _setPhaseRemain(round_num: number, remain: number) {
-    const roundInfo = this.gameInfo.rounds[round_num];
-    if (roundInfo) {
-      roundInfo.phase_remain = remain;
-    }
-  }
-
   // 统一：确保背景与角色已生成
-  private async _ensureBackgroundAndRoles() {
-    const gameInfo = this.gameInfo;
-
-    // 注意：ideas 和 roles 应该已经通过 handle_startup_idea 和 handle_role_selection 方法设置了
-    // 这里我们只需要确保背景已生成
-
+  private async background() {
+    const gameInfo = this.state;
     if (!gameInfo.background) {
       const ideas = Object.values(gameInfo.ideas);
       try {
@@ -217,11 +199,11 @@ export class Game {
 
   // 统一：生成并写入当轮事件数据
   private async _prepareRoundData(round_num: number) {
-    const gameInfo = this.gameInfo;
+    const gameInfo = this.state;
     const event = await this.generateEvent(round_num);
 
     // 创建 RoundInfo
-    const roundInfo: RoundInfo = {
+    const roundInfo: RoundState = {
       situation: event.situation || "",
       decision_options: event.event.decision_options,
       private_messages: event.private_messages,
@@ -235,7 +217,7 @@ export class Game {
 
   // 统一：到点为未提交玩家自动提交
   private async _autoSubmitMissingPlayers(round_num: number, reason: string) {
-    const roundInfo = this.gameInfo.rounds[round_num];
+    const roundInfo = this.state.rounds[round_num];
     if (!roundInfo) return;
 
     const option_keys = Object.keys(roundInfo.decision_options);
@@ -260,17 +242,17 @@ export class Game {
     setTimeout(async () => {
       const r = this.room;
       if (!r) return;
-      const gameInfo = this.gameInfo;
+      const gameInfo = this.state;
       if (
         gameInfo.current_round !== expected_round ||
-        r.state !== RoomState.PLAYING
+        r.state !== RoomStatus.PLAYING
       )
         return;
       await r.broadcast({
         type: "game_state",
         data: {
           room_state: this.room.state,
-          game_state: this.gameInfo,
+          game_state: this.state,
           players: this.room.get_all_players(),
         },
       });
@@ -278,17 +260,17 @@ export class Game {
     setTimeout(async () => {
       const r = this.room;
       if (!r) return;
-      const gameInfo = this.gameInfo;
+      const gameInfo = this.state;
       if (
         gameInfo.current_round !== expected_round ||
-        r.state !== RoomState.PLAYING
+        r.state !== RoomStatus.PLAYING
       )
         return;
       await r.broadcast({
         type: "game_state",
         data: {
           room_state: this.room.state,
-          game_state: this.gameInfo,
+          game_state: this.state,
           players: this.room.get_all_players(),
         },
       });
@@ -328,10 +310,10 @@ export class Game {
     let prompt = P1.replace("{initial_idea}", combined);
     const playersInfo = this.room
       .get_online_players()
-      .map((p) => `${p.name}(${this.gameInfo.roles[p.name] || "未选择角色"})`)
+      .map((p) => `${p.name}(${this.state.roles[p.name] || "未选择角色"})`)
       .join("、");
     prompt = prompt.replace("{players}", playersInfo);
-    const gameInfo = this.gameInfo;
+    const gameInfo = this.state;
     gameInfo.background = await new LLM().text(prompt, { temperature: 0.7 });
     return gameInfo.background;
   }
@@ -375,7 +357,7 @@ export class Game {
    * @returns Promise<生成的事件数据>
    */
   async generateEvent(round_num: number): Promise<GeneratedEvent> {
-    const gameInfo = this.gameInfo;
+    const gameInfo = this.state;
     let prompt = P2.replace("{background}", gameInfo.background || "");
     prompt = prompt.replace("{current_round}", String(round_num));
     const prev = this._buildPreviousExperience(round_num) || "暂无之前经历";
@@ -393,7 +375,6 @@ export class Game {
           situation: json.situation || "",
           event: json.event,
           private_messages: json.private_messages,
-          is_default_event: false,
         };
       } catch {
         // retry
@@ -411,7 +392,7 @@ export class Game {
   }
 
   async generateRoundAnalysis(current_round: number) {
-    const gameInfo = this.gameInfo;
+    const gameInfo = this.state;
     if (current_round <= 1) {
       return "";
     }
@@ -466,7 +447,7 @@ export class Game {
   }
 
   async generateFinalReport() {
-    const gameInfo = this.gameInfo;
+    const gameInfo = this.state;
     const outputs: string[] = [];
     for (let round = 1; round <= 5; round++) {
       const parts: string[] = [];
@@ -528,7 +509,7 @@ export class Game {
   }
 
   async calculateGameResult() {
-    const gameInfo = this.gameInfo;
+    const gameInfo = this.state;
     const base_score = 50;
     const user_growth = Game._randInt(1000, 100000);
     const revenue = Game._randInt(10000, 1000000);
@@ -567,13 +548,12 @@ export class Game {
 
     // 更新 GameInfo 的结果
     gameInfo.result = { report: final_report };
-    gameInfo.state = GameState.FINISHED;
+    gameInfo.state = GameStatus.FINISHED;
 
     return {
       final_score,
       success_level,
       metrics: { user_growth, revenue, market_share, team_size },
-      timeline: this._generateTimeline(),
       player_performance,
       playerScores,
       final_report,
@@ -581,7 +561,7 @@ export class Game {
   }
 
   private _calculatePlayerPerformance() {
-    const gameInfo = this.gameInfo;
+    const gameInfo = this.state;
     const perf: Array<Record<string, any>> = [];
     for (const p of Object.values(this.room.players)) {
       // 计算玩家在所有轮次中的行动次数
@@ -601,28 +581,6 @@ export class Game {
     return perf;
   }
 
-  private _generateAchievements(score: number) {
-    const a: string[] = [];
-    if (score >= 90)
-      a.push("🦄 独角兽成就", "💰 十亿美元估值", "🌟 行业领导者");
-    else if (score >= 75)
-      a.push("📈 成功IPO", "🏆 年度最佳创业公司", "🌍 国际化扩张");
-    else if (score >= 60)
-      a.push("💼 盈利达成", "👥 团队建设专家", "📊 市场份额突破");
-    else if (score >= 45) a.push("🎯 产品上线", "💡 创新思维", "🤝 团队协作");
-    return a;
-  }
-
-  private _generateTimeline() {
-    return [
-      { round: 1, event: "产品原型开发完成", impact: "positive" },
-      { round: 2, event: "获得首批用户", impact: "positive" },
-      { round: 3, event: "完成A轮融资", impact: "positive" },
-      { round: 4, event: "市场竞争加剧", impact: "negative" },
-      { round: 5, event: "战略合作达成", impact: "positive" },
-    ];
-  }
-
   private static _randInt(min: number, max: number) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
@@ -639,9 +597,9 @@ export class Game {
     if (existed) clearInterval(existed);
     const timer = setInterval(async () => {
       try {
-        if (!this.room || this.room.state !== RoomState.PLAYING)
+        if (!this.room || this.room.state !== RoomStatus.PLAYING)
           return clearInterval(timer);
-        const gameInfo = this.gameInfo;
+        const gameInfo = this.state;
         const current_round = gameInfo.current_round;
         const roundInfo = gameInfo.rounds[current_round];
 
@@ -738,22 +696,22 @@ export class Game {
     const player = this.room.get_player(player_name);
     if (!player) return;
     // 将创业想法存储到 GameInfo 中
-    this.gameInfo.ideas[player_name] = idea;
+    this.state.ideas[player_name] = idea;
     await this.room.broadcast({
       type: "game_state",
       data: {
-        game_state: this.gameInfo,
+        game_state: this.state,
       },
     });
     if (this.room.all_players_have_ideas()) {
       const firstPlayer = this.room.get_online_players()[0];
-      this.gameInfo.selected_idea = firstPlayer
-        ? this.gameInfo.ideas[firstPlayer.name] || ""
+      this.state.selected_idea = firstPlayer
+        ? this.state.ideas[firstPlayer.name] || ""
         : "";
       await this.room.broadcast({
         type: "game_state",
         data: {
-          game_state: this.gameInfo,
+          game_state: this.state,
         },
       });
     }
@@ -762,23 +720,22 @@ export class Game {
   async handle_start_game(player_name: string) {
     const player = this.room.get_player(player_name);
     if (!player || !player.is_host) return;
-    console.log(this.room.state, RoomState.WAITING);
-    if (this.room.state !== RoomState.WAITING) return;
+    console.log(this.room.state, RoomStatus.WAITING);
+    if (this.room.state !== RoomStatus.WAITING) return;
     await this.room.broadcast({
       type: "game_state",
       data: {
         room_state: this.room.state,
-        game_state: this.gameInfo,
+        game_state: this.state,
         players: this.room.get_all_players(),
       },
     });
-    const gameInfo = await this._ensureBackgroundAndRoles();
-    this.room.state = RoomState.PLAYING;
+    this.room.state = RoomStatus.PLAYING;
     await this.room.broadcast({
       type: "game_state",
       data: {
         room_state: this.room.state,
-        game_state: this.gameInfo,
+        game_state: this.state,
         players: this.room.get_all_players(),
       },
     });
@@ -807,21 +764,21 @@ export class Game {
    * - 所有玩家都选择角色后自动开始游戏
    * - 生成背景故事和第一轮事件
    *
-   * @param player_name 玩家名称
+   * @param player_id 玩家名称
    * @param role 选择的角色（CEO/CTO/CMO/COO）
    */
-  async handle_role_selection(player_name: string, role: string) {
-    const player = this.room.get_player(player_name);
+  async handle_role_selection(player_id: string, role: string) {
+    const player = this.room.get_player(player_id);
     if (!player) return;
-    if (this.gameInfo.roles[player_name]) {
-      await this.room.send_to_player(player_name, {
+    if (this.state.roles[player_id]) {
+      await this.room.send_to_player(player_id, {
         type: "role_selection_error",
         data: { message: "你已经选择过角色了" },
       });
       return;
     }
     if (!Object.values(RoleEnum).includes(role as RoleEnum)) {
-      await this.room.send_to_player(player_name, {
+      await this.room.send_to_player(player_id, {
         type: "role_selection_error",
         data: { message: `无效的角色: ${role}` },
       });
@@ -829,23 +786,22 @@ export class Game {
     }
     for (const p of Object.values(this.room.players)) {
       if (
-        p.name !== player_name &&
-        this.gameInfo.roles[p.name] === (role as RoleEnum)
+        p.name !== player_id &&
+        this.state.roles[p.name] === (role as RoleEnum)
       ) {
-        await this.room.send_to_player(player_name, {
+        await this.room.send_to_player(player_id, {
           type: "role_selection_error",
           data: { message: `角色 ${role} 已被其他玩家选择，请选择其他角色` },
         });
         return;
       }
     }
-    // 将角色存储到 GameInfo 中
-    this.gameInfo.roles[player_name] = role as RoleEnum;
+    this.state.roles[player_id] = role as RoleEnum;
     await this.room.broadcast({
       type: "game_state",
       data: {
         room_state: this.room.state,
-        game_state: this.gameInfo,
+        game_state: this.state,
         players: this.room.get_all_players(),
       },
     });
@@ -855,54 +811,26 @@ export class Game {
   }
 
   private async _auto_start_game_after_role_selection() {
-    this.room.state = RoomState.PLAYING;
+    await Promise.allSettled([
+      this.background(),
+      new Promise((resolve) => {
+        setTimeout(resolve, 8000);
+      }),
+    ]);
+    
+    // 准备第一轮数据
+    await this._prepareRoundData(1);
+    this.state.current_round = 1;
+    
     await this.room.broadcast({
       type: "game_state",
       data: {
         room_state: this.room.state,
-        game_state: this.gameInfo,
-        players: this.room.get_all_players(),
-      },
-    });
-    await this._ensureBackgroundAndRoles();
-    await this.room.broadcast({
-      type: "game_state",
-      data: {
-        room_state: this.room.state,
-        game_state: this.gameInfo,
-        players: this.room.get_all_players(),
-      },
-    });
-    this.gameInfo.current_round = 1;
-    await this.room.broadcast({
-      type: "game_state",
-      data: {
-        room_state: this.room.state,
-        game_state: this.gameInfo,
-        players: this.room.get_all_players(),
-      },
-    });
-    const event = await this._prepareRoundData(1);
-    this.room.state = RoomState.PLAYING;
-    const roundInfo = this.gameInfo.rounds[1];
-    await this.room.broadcast({
-      type: "game_state",
-      data: {
-        room_state: this.room.state,
-        game_state: this.gameInfo,
-        players: this.room.get_all_players(),
-      },
-    });
-    await this.room.broadcast({
-      type: "game_state",
-      data: {
-        room_state: this.room.state,
-        game_state: this.gameInfo,
+        game_state: this.state,
         players: this.room.get_all_players(),
       },
     });
     this._schedulePhaseTransitions(1);
-    // timeout auto submit
     const key = this._taskKey(this.room.id, 1);
     this._cancelRoundTimeout(1);
     Game._round_timeout_tasks.set(
@@ -945,8 +873,8 @@ export class Game {
   async handle_game_action(player_name: string, action_data: any) {
     console.log(player_name, action_data);
     const player = this.room.get_player(player_name);
-    if (!player || this.room.state !== RoomState.PLAYING) return;
-    const gameInfo = this.gameInfo;
+    if (!player || this.room.state !== RoomStatus.PLAYING) return;
+    const gameInfo = this.state;
     const current_round = gameInfo.current_round;
 
     // 直接记录玩家行动到 RoundInfo
@@ -956,7 +884,7 @@ export class Game {
       type: "game_state",
       data: {
         room_state: this.room.state,
-        game_state: this.gameInfo,
+        game_state: this.state,
         players: this.room.get_all_players(),
       },
     });
@@ -968,20 +896,19 @@ export class Game {
   }
 
   private async _handle_round_complete() {
-    const gameInfo = this.gameInfo;
+    const gameInfo = this.state;
     if (gameInfo.current_round >= 5) await this._handle_game_complete();
     else await this._start_next_round();
   }
 
   private async _handle_game_complete() {
     try {
-      const result = await this.calculateGameResult();
-      this.room.state = RoomState.WAITING;
+      this.room.state = RoomStatus.WAITING;
       await this.room.broadcast({
         type: "game_state",
         data: {
           room_state: this.room.state,
-          game_state: this.gameInfo,
+          game_state: this.state,
           players: this.room.get_all_players(),
         },
       });
@@ -991,27 +918,26 @@ export class Game {
   }
 
   private async _start_next_round() {
-    const gameInfo = this.gameInfo;
+    const gameInfo = this.state;
     const next = gameInfo.current_round + 1;
     await this.room.broadcast({
       type: "game_state",
       data: {
         room_state: this.room.state,
-        game_state: this.gameInfo,
+        game_state: this.state,
         players: this.room.get_all_players(),
       },
     });
     try {
       await this.generateRoundAnalysis(next);
     } catch {}
-    const event = await this._prepareRoundData(next);
+    await this._prepareRoundData(next);
     gameInfo.current_round = next;
-    const roundInfo = gameInfo.rounds[next];
     await this.room.broadcast({
       type: "game_state",
       data: {
         room_state: this.room.state,
-        game_state: this.gameInfo,
+        game_state: this.state,
         players: this.room.get_all_players(),
       },
     });
@@ -1019,7 +945,7 @@ export class Game {
       type: "game_state",
       data: {
         room_state: this.room.state,
-        game_state: this.gameInfo,
+        game_state: this.state,
         players: this.room.get_all_players(),
       },
     });
@@ -1039,14 +965,14 @@ export class Game {
     const player = this.room.get_player(player_name);
     if (!player || !player.is_host) return;
     this.cleanupRoom();
-    this.gameInfo = createDefaultGameInfo();
-    this.gameInfo.selected_idea = "";
-    this.room.state = RoomState.WAITING;
+    this.state = createDefaultGameInfo();
+    this.state.selected_idea = "";
+    this.room.state = RoomStatus.WAITING;
     await this.room.broadcast({
       type: "game_state",
       data: {
         room_state: this.room.state,
-        game_state: this.gameInfo,
+        game_state: this.state,
         players: this.room.get_all_players(),
       },
     });
@@ -1054,7 +980,7 @@ export class Game {
 
   private async _auto_submit_after_timeout(round_num: number) {
     try {
-      if (this.room.state !== RoomState.PLAYING) return;
+      if (this.room.state !== RoomStatus.PLAYING) return;
       await this._autoSubmitMissingPlayers(round_num, "round_timeout_auto");
     } finally {
       await this._handle_round_complete();

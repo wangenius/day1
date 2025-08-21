@@ -7,41 +7,14 @@ import { PrivateModal } from "./PrivateModal";
 import { Selection } from "./Selection";
 
 /**
- * 角色图片映射类型
- */
-interface RoleImageMap {
-  [key: string]: string;
-}
-
-/**
  * 游戏玩法组件
  * 管理游戏的不同阶段和玩家交互
  */
 function GamePlay() {
   const { room, game } = useGameState();
-
   const [showEventModal, setShowEventModal] = useState(false);
   const [showPrivateModal, setShowPrivateModal] = useState(false);
 
-  // 移除本地状态，统一由 Context 管理
-
-  /**
-   * 根据角色名称确定对应的图片
-   * @param role - 角色名称
-   * @returns 图片路径
-   */
-  const getRoleImage = (role: string): string => {
-    const roleImageMap: RoleImageMap = {
-      CEO: "/image (2).png",
-      CTO: "/image (3).png",
-      CMO: "/image (4).png",
-      COO: "/image (1).png",
-      CPO: "/image (5).png",
-    };
-    return roleImageMap[role.toUpperCase()] || "/image (2).png"; // 默认使用CEO图片
-  };
-
-  console.log(game.state.rounds[game.state.current_round]);
 
   /**
    * 渲染不同阶段的组件
@@ -96,11 +69,6 @@ function GamePlay() {
       <PrivateModal
         isOpen={showPrivateModal}
         playerName={room.player}
-        playerRole={game.state.roles[room.player]}
-        privateMessages={
-          game.state.rounds[game.state.current_round].private_messages
-        }
-        getRoleImage={getRoleImage}
         onClose={() => setShowPrivateModal(false)}
       />
       <EventModal

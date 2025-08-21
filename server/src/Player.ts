@@ -1,6 +1,6 @@
 import type { WebSocket } from "ws";
 import { Room } from "./Room.js";
-import { PlayerInfo } from "./types/types.js";
+import { PlayerState } from "./types/types.js";
 import { logger } from "./utils/logger.js";
 
 /**
@@ -18,7 +18,7 @@ import { logger } from "./utils/logger.js";
  * - 完善的错误处理和异常恢复机制
  * - 自动的资源清理和内存泄漏防护
  */
-export class Player implements PlayerInfo {
+export class Player implements PlayerState {
   /** 玩家唯一标识符（用户名） */
   name: string;
 
@@ -198,7 +198,7 @@ export class Player implements PlayerInfo {
         is_reconnect, // 是否为重连
         players, // 玩家列表
         room_state: room.state, // 房间状态
-        game_state: room.game.gameInfo, // 游戏状态
+        game_state: room.game.state, // 游戏状态
       },
     } as const;
 

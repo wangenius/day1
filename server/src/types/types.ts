@@ -4,7 +4,7 @@
  *
  * 只有准备中的时候房间可以加入玩家，其他时候不可以加入玩家。
  */
-export enum RoomState {
+export enum RoomStatus {
   /** 等待 */
   WAITING = "waiting",
   /** 进行中 */
@@ -15,7 +15,7 @@ export enum RoomState {
  * 1. 游戏进行中: 此时游戏进行中，每轮游戏有且仅有一个状态，状态会根据当前轮次变化
  * 2. 游戏结束: 此时游戏结束
  */
-export enum GameState {
+export enum GameStatus {
   /** 游戏进行中*/
   PLAYING = "playing",
   /** 游戏结束 */
@@ -32,7 +32,7 @@ export enum RoleEnum {
 
 /** 当一个玩家加入一个房间后，会拥有一个玩家信息卡，注意，每个房间中的玩家名称不能重复，否则无法加入该房间
  */
-export interface PlayerInfo {
+export interface PlayerState {
   /** 玩家名称 */
   name: string;
   /** 是否在线 */
@@ -41,9 +41,9 @@ export interface PlayerInfo {
   is_host: boolean;
 }
 
-export interface GameInfo {
+export interface GameState {
   /** 游戏状态 */
-  state: GameState;
+  state: GameStatus;
   /** 游戏结果 */
   result: GameResult;
   /** 创业想法 */
@@ -57,12 +57,12 @@ export interface GameInfo {
   /** 背景 */
   background: string;
   /** 轮次 */
-  rounds: Record<number, RoundInfo>;
+  rounds: Record<number, RoundState>;
   /** 当前轮次 */
   current_round: number;
 }
 
-export interface RoundInfo {
+export interface RoundState {
   /** 轮次情况 */
   situation: string;
   /** 轮次决策选项: ABC */

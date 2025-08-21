@@ -12,11 +12,6 @@ export const InfoAndOptions = ({
   onShowPrivateModal,
 }: InfoAndOptionsProps) => {
   const { game, room } = useGameState();
-
-  const getRoleImage = (role: string): string => {
-    return `/image (${role.toUpperCase()}).png`;
-  };
-
   return (
     <div className="flex-1 w-full bg-stone-950 overflow-hidden flex flex-col p-4">
       {/* 顶部玩家信息和阶段标题 */}
@@ -24,8 +19,6 @@ export const InfoAndOptions = ({
         <div className="mb-4">
           <PlayerInfo
             playerName={room.player}
-            playerRole={game.state.roles[room.player]}
-            getRoleImage={getRoleImage}
             size="medium"
           />
         </div>

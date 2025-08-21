@@ -1,9 +1,8 @@
+import { useGameState } from "@/context/StateContext";
+
 interface PrivateModalProps {
   isOpen: boolean;
   playerName: string;
-  playerRole: string;
-  privateMessages: Record<string, string>;
-  getRoleImage: (role: string) => string;
   onClose: () => void;
 }
 
@@ -13,16 +12,15 @@ interface PrivateModalProps {
 export const PrivateModal = ({
   isOpen,
   playerName,
-  playerRole,
-  privateMessages,
-  getRoleImage,
-  onClose
+  onClose,
 }: PrivateModalProps) => {
-  if (
-    !isOpen ||
-    !privateMessages ||
-    !privateMessages[String(playerRole).toUpperCase()]
-  ) {
+  const { game } = useGameState();
+  const playerRole = game.state.roles[playerName];
+  const privateMessage =
+    game.state.rounds[game.state.current_round].private_messages[
+      String(playerRole).toUpperCase()
+    ];
+  if (!isOpen) {
     return null;
   }
 
@@ -58,7 +56,7 @@ export const PrivateModal = ({
             <div className="w-20 h-20 absolute left-[55px] top-[36px] bg-amber-400/20 blur-[50px]"></div>
             <img
               className="w-40 h-40"
-              src={getRoleImage(playerRole)}
+              src={`/image_${playerRole.toLowerCase()}.png`}
               alt="Player Avatar"
             />
             <div className="absolute bottom-0 right-0 text-right text-white text-sm font-normal font-['Space_Grotesk'] bg-black/50 px-3 py-2 rounded-lg backdrop-blur-sm border border-amber-500/30">
@@ -95,7 +93,7 @@ export const PrivateModal = ({
             {/* 内容 */}
             <div className="relative z-10">
               <div className="text-white text-lg font-normal font-['Cactus_Classical_Serif'] leading-relaxed text-center mb-6">
-                {privateMessages[String(playerRole).toUpperCase()]}
+                {privateMessage}
               </div>
 
               {/* 底部装饰线 */}

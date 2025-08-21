@@ -1,6 +1,6 @@
 import { Game } from "./Game.js";
 import { Player } from "./Player.js";
-import { RoomState, RoleEnum, PlayerInfo, GameInfo } from "./types/types.js";
+import { RoomStatus, RoleEnum, PlayerState, GameState } from "./types/types.js";
 import { logger } from "./utils/logger.js";
 
 /**
@@ -31,7 +31,7 @@ export class Room {
   created_at: Date;
 
   /** 房间当前状态 - PREPARE(准备阶段) | PLAYING(游戏进行中) */
-  state: RoomState = RoomState.WAITING;
+  state: RoomStatus = RoomStatus.WAITING;
 
   /** 当前房间关联的游戏实例 - 处理所有游戏逻辑 */
   game: Game;
@@ -121,9 +121,9 @@ export class Room {
     data: {
       room_id?: string;
       player_id?: string;
-      players?: PlayerInfo[];
-      game_state?: GameInfo;
-      room_state?: RoomState;
+      players?: PlayerState[];
+      game_state?: GameState;
+      room_state?: RoomStatus;
     };
   }) {
     let sent = 0;
@@ -155,7 +155,7 @@ export class Room {
    * @throws Error 当游戏已开始或房间已满时
    */
   add_player(player: Player) {
-    if (this.state !== RoomState.WAITING)
+    if (this.state !== RoomStatus.WAITING)
       throw new Error("游戏已开始，无法加入房间");
     const existing = this.get_player(player.name);
     if (existing) {
@@ -338,7 +338,7 @@ export class Room {
    * @returns 是否所有玩家都已提交创业想法
    */
   all_players_have_ideas() {
-    const ideas = this.game.gameInfo.ideas;
+    const ideas = this.game.state.ideas;
     const players = Array.from(this.players.keys());
     return players.every((player) => ideas[player]);
   }
@@ -359,7 +359,7 @@ export class Room {
    * @returns 是否所有玩家都已选择角色
    */
   all_players_have_roles() {
-    const roles = this.game.gameInfo.roles;
+    const roles = this.game.state.roles;
     const players = Array.from(this.players.keys());
     return players.every((player) => roles[player]);
   }
@@ -368,7 +368,7 @@ export class Room {
    * 已被选中的角色列表
    */
   get_selected_roles() {
-    const roles = this.game.gameInfo.roles;
+    const roles = this.game.state.roles;
     const players = Array.from(this.players.keys());
     return players.map((player) => roles[player]);
   }
