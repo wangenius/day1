@@ -1,16 +1,33 @@
-import OpenAI from "openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { generateText, generateObject } from "ai";
 import { config } from "dotenv";
+import { z } from "zod";
 import { logger } from "./logger.js";
 
 config();
 
 const DEFAULT_MODEL = "zai-org/glm-4.5";
 
+// Create PPIO provider
+function createPPIOProvider({
+  apiKey,
+  baseURL,
+}: {
+  apiKey?: string;
+  baseURL?: string;
+}) {
+  return createOpenAICompatible({
+    name: "ppio",
+    apiKey: apiKey || process.env.PPIO_API_KEY || "",
+    baseURL: baseURL || process.env.PPIO_BASE_URL || "https://api.ppio.ai/v1",
+  });
+}
+
 export class LLM {
   private apiKey?: string;
   private baseURL?: string;
   private model: string;
-  private client: OpenAI;
+  private client: ReturnType<typeof createPPIOProvider>;
 
   constructor({
     apiKey,
@@ -20,7 +37,14 @@ export class LLM {
     this.apiKey = apiKey || process.env.PPIO_API_KEY;
     this.baseURL = baseURL || process.env.PPIO_BASE_URL;
     this.model = model || DEFAULT_MODEL;
-    this.client = new OpenAI({ apiKey: this.apiKey, baseURL: this.baseURL });
+
+    logger.info("LLM model:", this.model);
+    logger.info("LLM apiKey:", this.apiKey);
+    logger.info("LLM baseURL:", this.baseURL);
+    this.client = createPPIOProvider({
+      apiKey: this.apiKey,
+      baseURL: this.baseURL,
+    });
   }
 
   async text(
@@ -30,19 +54,16 @@ export class LLM {
       temperature = 0.7,
     }: { systemPrompt?: string; temperature?: number } = {}
   ): Promise<string> {
-    const messages: Array<{ role: "system" | "user"; content: string }> = [];
-    if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
-    messages.push({ role: "user", content: prompt });
     logger.info("prompt length:", prompt?.length || 0);
     try {
-      const resp = await this.client.chat.completions.create({
-        model: this.model,
-        messages,
+      const { text } = await generateText({
+        model: this.client.chatModel(this.model),
+        system: systemPrompt,
+        prompt,
         temperature,
       });
-      const content = resp?.choices?.[0]?.message?.content || "";
-      logger.info("LLM text response length:", content.length);
-      return content;
+      logger.info("LLM text response length:", text.length);
+      return text;
     } catch (e: any) {
       throw new Error(`调用OpenAI API失败: ${e?.message || e}`);
     }
@@ -53,24 +74,21 @@ export class LLM {
     {
       systemPrompt = "请以有效的JSON格式回复，不要包含任何其他文本。不要包含markdown格式的前后缀！",
       temperature = 0.3,
-    }: { systemPrompt?: string; temperature?: number } = {}
-  ): Promise<Record<string, unknown>> {
+      schema = z.record(z.unknown()),
+    }: { systemPrompt?: string; temperature?: number; schema?: z.ZodType<any> } = {}
+  ): Promise<any> {
     try {
-      const resp = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: prompt },
-        ],
+      const { object } = await generateObject({
+        model: this.client.chatModel(this.model),
+        system: systemPrompt,
+        prompt,
         temperature,
-        response_format: { type: "json_object" },
+        schema,
       });
-      let content = resp?.choices?.[0]?.message?.content || "";
-      content = sanitizeJson(content);
-      logger.info("LLM json response length:", content.length);
-      return JSON.parse(content);
+      logger.info("LLM json response:", JSON.stringify(object).length, "characters");
+      return object;
     } catch (e: any) {
-      logger.error("LLM json failed:", e?.message || e);
+      logger.error("LLM json failed:", e);
       throw new Error(`调用OpenAI API失败: ${e?.message || e}`);
     }
   }
@@ -82,8 +100,5 @@ function sanitizeJson(content: string): string {
   if (s.startsWith("```")) s = s.slice(3);
   if (s.endsWith("```")) s = s.slice(0, -3);
   s = s.trim();
-  s = s.replace(/,\s*([}\]])/g, "$1");
-  s = s.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '"$2":');
-  s = s.replace(/,\s*$/g, "");
   return s;
 }

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { z } from "zod";
 import { Room } from "./Room.js";
 import {
   GameState,
@@ -18,11 +19,25 @@ const promptDir = path.join(
 const readPrompt = (name: string) =>
   fs.readFileSync(path.join(promptDir, name), "utf-8");
 
-const ROLE_PROMPT = readPrompt("role_generation.txt");
 const P1 = readPrompt("prompt1.txt");
 const P2 = readPrompt("prompt2.txt");
 const P3 = readPrompt("prompt3.txt");
 const P4 = readPrompt("prompt4.txt");
+
+const GeneratedEventSchema = z.object({
+  situation: z.string().describe("在上一轮决策下的企业发展状态描述"),
+  event: z.string().describe("当前轮次事件的标题"),
+  options: z
+    .record(z.string())
+    .describe(
+      "三个决策选项，键为选项标识（A、B、C），值为决策选项内容（每条不超过40个字）"
+    ),
+  messages: z
+    .record(z.string())
+    .describe(
+      "四个角色的私密信息，键为角色代码（CEO、CTO、CMO、COO），值为该角色的专属信息（最多30个字）。"
+    ),
+});
 
 /**
  * AI生成事件的数据结构
@@ -35,7 +50,6 @@ const P4 = readPrompt("prompt4.txt");
 interface GeneratedEvent {
   situation?: string;
   event: {
-    event_title: string;
     event_description: string;
     decision_options: Record<string, string>;
   };
@@ -338,16 +352,6 @@ export class Game {
     return gameInfo.background;
   }
 
-  async generateRolesFromBackground(background: string) {
-    if (!background) throw new Error("背景故事不能为空");
-    const prompt = ROLE_PROMPT.replace("{background}", background);
-    const defs = (await new LLM().json(prompt, { temperature: 0.7 })) as Record<
-      string,
-      { name: string; description: string; actions?: string[] }
-    >;
-    return defs;
-  }
-
   /**
    * 生成轮次事件 - AI驱动的动态内容生成
    *
@@ -384,30 +388,18 @@ export class Game {
     prompt = prompt.replace("{previous_experience}", prev);
 
     const llm = new LLM();
-    for (let i = 0; i < 3; i++) {
-      try {
-        const json = (await llm.json(prompt, {
-          temperature: 0.7,
-        })) as unknown as GeneratedEvent;
-        if (!Game._validateEventResponse(json))
-          throw new Error("返回的JSON结构不完整");
-        return {
-          situation: json.situation || "",
-          event: json.event,
-          private_messages: json.private_messages,
-        };
-      } catch {
-        // retry
-      }
-    }
+    const json = await llm.json(prompt, {
+      temperature: 0.7,
+      schema: GeneratedEventSchema,
+    });
+    logger.info(json);
     return {
-      situation: "",
+      situation: json.event,
       event: {
-        event_title: "",
-        event_description: "",
-        decision_options: {},
+        event_description: json.event,
+        decision_options: json.options,
       },
-      private_messages: {},
+      private_messages: json.messages,
     };
   }
 
