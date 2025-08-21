@@ -1,15 +1,18 @@
-import { useState, FormEvent } from "react";
-import { Button } from "../Button";
+import { FormEvent, useState } from "react";
 import { useGameState } from "../../context/StateContext";
+import { Button } from "../Button";
+import { PlayerStatus } from "./PlayerStatus";
 
 /**
  * 游戏大厅组件
  * 用户输入创业想法的页面
  */
 function IdeaPickerInRoom() {
-  const { room, game: gameState } = useGameState();
-  const handleSubmit = gameState.handleStartupIdeaSubmit;
-  const [startupIdea, setStartupIdea] = useState<string>("");
+  const { room, game } = useGameState();
+  const handleSubmit = game.handleStartupIdeaSubmit;
+  const [startupIdea, setStartupIdea] = useState<string>(
+    game.state.ideas[room.player] || ""
+  );
   const [ideaSubmitted, setIdeaSubmitted] = useState<boolean>(false);
 
   /**
@@ -58,28 +61,30 @@ function IdeaPickerInRoom() {
         <div className="text-white/70 text-sm font-normal font-['Cactus_Classical_Serif'] mb-2">
           房间号: <span className="text-white">{room.state?.id}</span>
         </div>
-
-        {/* 玩家列表 */}
-        <div className="text-white/70 text-sm font-normal font-['Cactus_Classical_Serif']">
-          <div className="space-y-1">
-            {room.state?.players.map((player, index) => (
-              <div key={index} className="flex items-center justify-end gap-2">
-                <span className="text-white">{player.name}</span>
-                <div className="flex items-center gap-1">
-                  {/* 连接状态指示器 */}
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      player.is_online ? "bg-green-400" : "bg-red-400"
-                    }`}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       <div className="flex flex-col items-center space-y-8">
+        {/* 玩家列表 */}
+        <div className="flex items-center justify-center space-x-6">
+          {/* 将玩家按当前玩家优先排序 */}
+          {[...room.state.players]
+            .sort((a, b) => {
+              const aIsCurrent = a.name === room.player;
+              const bIsCurrent = b.name === room.player;
+              if (aIsCurrent && !bIsCurrent) return -1;
+              if (!aIsCurrent && bIsCurrent) return 1;
+              return 0;
+            })
+            .map((player) => {
+              return (
+                <PlayerStatus
+                  key={player.name}
+                  player={player.name}
+                  hasSubmitted={!!game.state.ideas[player.name]}
+                />
+              );
+            })}
+        </div>
         {/* 输入区域 */}
         <div className="w-full max-w-sm">
           <div className="relative">
@@ -89,7 +94,7 @@ function IdeaPickerInRoom() {
               onChange={(e) => setStartupIdea(e.target.value)}
               placeholder="你的项目是..."
               className="bg-transparent border-none outline-none text-white text-xl font-normal font-['Cactus_Classical_Serif'] leading-relaxed placeholder-white w-full resize-none overflow-hidden pl-4"
-              disabled={ideaSubmitted}
+              disabled={ideaSubmitted || !!game.state.ideas[room.player]}
               rows={3}
               style={{
                 minHeight: "80px",
@@ -114,7 +119,11 @@ function IdeaPickerInRoom() {
         <div className="mt-8">
           <Button
             onClick={handleSubmitIdea}
-            disabled={!startupIdea.trim() || ideaSubmitted}
+            disabled={
+              !startupIdea.trim() ||
+              ideaSubmitted ||
+              !!game.state.ideas[room.player]
+            }
           >
             {ideaSubmitted ? "已提交" : "确认"}
           </Button>

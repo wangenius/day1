@@ -170,10 +170,10 @@ export function useGame(params: UseGameParams): UseGameReturn {
    */
   const handleRoundAction = useCallback(
     (action: string): void => {
-      console.log("提交当前选择",action);
+      console.log("提交当前选择", action);
       console.log(webSocket.connected);
       if (webSocket.connected) {
-        console.log("提交当前选择",action);
+        console.log("提交当前选择", action);
         webSocket.send({
           type: "game_action",
           data: {
@@ -192,6 +192,22 @@ export function useGame(params: UseGameParams): UseGameReturn {
   useEffect(() => {
     if (!webSocket.connected) return;
     webSocket.listen((message) => {
+      if (message.type === "success") {
+        const data = message.data as {
+          room_id: string;
+          player_id: string;
+          is_reconnect: boolean;
+          players: any[];
+          room_state: "waiting" | "playing";
+          game_state: GameInfo;
+        };
+        if (data.room_state === "waiting") {
+          room.setRoomState("waiting");
+        } else {
+          room.setRoomState("playing");
+        }
+        setState(data.game_state);
+      }
       if (message.type === "game_state") {
         const data = message.data as {
           room_state: RoomState;

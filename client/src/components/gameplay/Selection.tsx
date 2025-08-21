@@ -19,10 +19,6 @@ export const Selection = ({ onShowPrivateModal }: SelectionProps) => {
   const hasPlayerSubmitted =
     !!game.state.rounds[game.state.current_round].player_actions[room.player];
 
-  const getRoleImage = (role: string): string => {
-    return `/image (${role.toUpperCase()}).png`;
-  };
-
   return (
     <div className="flex-1 w-full bg-stone-950 overflow-hidden flex flex-col p-4">
       {/* 所有玩家选择状态 */}
@@ -41,18 +37,14 @@ export const Selection = ({ onShowPrivateModal }: SelectionProps) => {
                   return 0;
                 })
                 .map((player) => {
-                  const isCurrentPlayer = player.name === room.player;
-
                   return (
                     <PlayerStatusCard
                       key={player.name}
-                      player={{
-                        name: player.name,
-                        role: game.state.roles[player.name] || "",
-                      }}
-                      isCurrentPlayer={isCurrentPlayer}
-                      hasSubmitted={hasPlayerSubmitted}
-                      getRoleImage={getRoleImage}
+                      player={player.name}
+                      hasSubmitted={
+                        !!game.state.rounds[game.state.current_round]
+                          .player_actions[player.name]
+                      }
                     />
                   );
                 })}
