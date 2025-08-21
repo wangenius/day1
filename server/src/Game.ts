@@ -522,35 +522,6 @@ export class Game {
 
   async calculateGameResult() {
     const gameInfo = this.state;
-    const base_score = 50;
-    const user_growth = Game._randInt(1000, 100000);
-    const revenue = Game._randInt(10000, 1000000);
-    const market_share = Game._randInt(1, 25);
-    const team_size = Game._randInt(5, 100);
-
-    // 计算总行动次数
-    const total_actions = Object.values(gameInfo.rounds).reduce(
-      (s, roundInfo) => s + Object.keys(roundInfo.player_actions).length,
-      0
-    );
-    const score_bonus = Math.min(total_actions * 2, 50);
-    const final_score = base_score + score_bonus;
-
-    let success_level = "创业失败";
-    if (final_score >= 90) success_level = "独角兽公司";
-    else if (final_score >= 75) success_level = "成功上市";
-    else if (final_score >= 60) success_level = "盈利稳定";
-    else if (final_score >= 45) success_level = "勉强生存";
-
-    const player_performance = this._calculatePlayerPerformance();
-    const playerScores: Record<string, number> = {};
-    for (const perf of player_performance) {
-      playerScores[String((perf as any).player)] = Math.min(
-        50 + Number((perf as any).contribution_score || 0),
-        100
-      );
-    }
-
     let final_report = "";
     try {
       final_report = (await this.generateFinalReport()) as unknown as string;
@@ -563,38 +534,8 @@ export class Game {
     gameInfo.state = GameStatus.FINISHED;
 
     return {
-      final_score,
-      success_level,
-      metrics: { user_growth, revenue, market_share, team_size },
-      player_performance,
-      playerScores,
       final_report,
     };
-  }
-
-  private _calculatePlayerPerformance() {
-    const gameInfo = this.state;
-    const perf: Array<Record<string, any>> = [];
-    for (const p of Object.values(this.room.players)) {
-      // 计算玩家在所有轮次中的行动次数
-      const action_count = Object.values(gameInfo.rounds).reduce(
-        (s, roundInfo) => {
-          return s + (roundInfo.player_actions[p.name] ? 1 : 0);
-        },
-        0
-      );
-      perf.push({
-        player: p.name,
-        role: gameInfo.roles[p.name],
-        actions_taken: action_count,
-        contribution_score: Math.min(action_count * 10, 50),
-      });
-    }
-    return perf;
-  }
-
-  private static _randInt(min: number, max: number) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
   private _cancelRoundTimeout(round: number) {
@@ -930,7 +871,20 @@ export class Game {
 
   private async _handle_game_complete() {
     try {
-      this.room.state = RoomStatus.WAITING;
+      this.state.state = GameStatus.FINISHED;
+      // 立即广播状态，让前端知道轮次已完成，应该显示加载页面
+      await this.room.broadcast({
+        type: "game_state",
+        data: {
+          room_state: this.room.state,
+          game_state: this.state,
+          players: this.room.get_all_players(),
+        },
+      });
+
+      // 计算游戏结果并生成最终报告
+      await this.calculateGameResult();
+
       await this.room.broadcast({
         type: "game_state",
         data: {
@@ -950,9 +904,7 @@ export class Game {
     // 先设置current_round
     state.current_round = state.current_round + 1;
 
-    try {
-      await this.generateRoundAnalysis(state.current_round);
-    } catch {}
+    await this.generateRoundAnalysis(state.current_round);
 
     // 再准备轮次事件
     await this.prepareRoundEvent(state.current_round);
