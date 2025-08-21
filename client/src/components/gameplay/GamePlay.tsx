@@ -14,13 +14,24 @@ function GamePlay() {
   const { room, game } = useGameState();
   const [showEventModal, setShowEventModal] = useState(false);
   const [showPrivateModal, setShowPrivateModal] = useState(false);
-
+  const [selection, setSelection] = useState(false);
+  const handleToSelection = () => {
+    setSelection(true);
+  };
 
   /**
    * 渲染不同阶段的组件
    * @returns JSX元素
    */
   const renderPhaseContent = () => {
+    if (selection) {
+      return (
+        <Selection
+          onShowEventModal={() => setShowEventModal(true)}
+          onShowPrivateModal={() => setShowPrivateModal(true)}
+        />
+      );
+    }
     if (game.state.rounds[game.state.current_round].phase_remain > 175) {
       return (
         <EventDisplay
@@ -34,6 +45,7 @@ function GamePlay() {
         <InfoAndOptions
           onShowEventModal={() => setShowEventModal(true)}
           onShowPrivateModal={() => setShowPrivateModal(true)}
+          handleToSelection={handleToSelection}
         />
       );
     }

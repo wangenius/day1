@@ -5,11 +5,13 @@ import { PrivateInfo } from "./PrivateInfo";
 interface InfoAndOptionsProps {
   onShowEventModal: () => void;
   onShowPrivateModal: () => void;
+  handleToSelection: () => void;
 }
 
 export const InfoAndOptions = ({
   onShowEventModal,
   onShowPrivateModal,
+  handleToSelection
 }: InfoAndOptionsProps) => {
   const { game, room } = useGameState();
   return (
@@ -17,10 +19,7 @@ export const InfoAndOptions = ({
       {/* 顶部玩家信息和阶段标题 */}
       <div className="flex flex-col items-center pt-4 pb-6">
         <div className="mb-4">
-          <PlayerInfo
-            playerName={room.player}
-            size="medium"
-          />
+          <PlayerInfo playerName={room.player} size="medium" />
         </div>
 
         <div
@@ -73,7 +72,7 @@ export const InfoAndOptions = ({
       <div className="flex flex-col items-center pb-8">
         <div
           className="cursor-pointer flex flex-col items-center gap-2 hover:opacity-80 transition-opacity"
-          onClick={onShowEventModal}
+          onClick={handleToSelection}
         >
           <div className="text-white/70 text-base font-normal font-['Cactus_Classical_Serif']">
             进入选择
