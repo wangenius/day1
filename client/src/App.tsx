@@ -34,9 +34,17 @@ function App() {
       if (game.state.background === "") {
         return <GameLoadingPage />;
       }
+      // 检查是否所有玩家都已提交
+      const currentRound = game.state.rounds[game.state.current_round];
+      const allPlayersSubmitted = currentRound && 
+        Object.keys(currentRound.player_actions || {}).length === room.state.players.length;
+      
       if (
         game.state.rounds[game.state.current_round] === undefined ||
-        game.state.rounds[game.state.current_round].phase_remain === 0
+        game.state.rounds[game.state.current_round].phase_remain === 0 ||
+        !game.state.rounds[game.state.current_round].situation ||
+        Object.keys(game.state.rounds[game.state.current_round].decision_options || {}).length === 0 ||
+        allPlayersSubmitted
       ) {
         return <RoundLoadingPage />;
       }

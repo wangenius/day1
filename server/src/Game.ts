@@ -158,9 +158,20 @@ export class Game {
 
   private _allPlayersSubmitted(round_num: number) {
     const roundInfo = this.state.rounds[round_num];
-    if (!roundInfo) return false;
+    if (!roundInfo) {
+      console.log(`[DEBUG] Round ${round_num} info not found`);
+      return false;
+    }
     const online = this.room.get_online_players();
     const submitted = Object.keys(roundInfo.player_actions);
+    console.log(
+      `[DEBUG] Round ${round_num}: ${submitted.length}/${online.length} players submitted`
+    );
+    console.log(
+      `[DEBUG] Online players:`,
+      online.map((p) => p.name)
+    );
+    console.log(`[DEBUG] Submitted players:`, submitted);
     return submitted.length === online.length;
   }
 
@@ -194,12 +205,21 @@ export class Game {
       }
     }
 
+    this.room.broadcast({
+      type: "game_state",
+      data: {
+        room_state: this.room.state,
+        game_state: this.state,
+        players: this.room.get_all_players(),
+      },
+    });
+
     return gameInfo;
   }
 
   // 统一：生成并写入当轮事件数据
-  private async _prepareRoundData(round_num: number) {
-    const gameInfo = this.state;
+  private async prepareRoundEvent(round_num: number) {
+    const state = this.state;
     const event = await this.generateEvent(round_num);
 
     // 创建 RoundInfo
@@ -211,7 +231,7 @@ export class Game {
       phase_remain: 180,
     };
 
-    gameInfo.rounds[round_num] = roundInfo;
+    state.rounds[round_num] = roundInfo;
     return event;
   }
 
@@ -814,14 +834,14 @@ export class Game {
     await Promise.allSettled([
       this.background(),
       new Promise((resolve) => {
-        setTimeout(resolve, 8000);
+        setTimeout(resolve, 6000);
       }),
     ]);
-    
+
     // 准备第一轮数据
-    await this._prepareRoundData(1);
+    await this.prepareRoundEvent(1);
     this.state.current_round = 1;
-    
+
     await this.room.broadcast({
       type: "game_state",
       data: {
@@ -892,11 +912,26 @@ export class Game {
     if (this._allPlayersSubmitted(current_round)) {
       this._cancelRoundTimeout(current_round);
       await this._handle_round_complete();
+    } else {
+      console.log(
+        `[DEBUG] Not all players submitted yet for round ${current_round}`
+      );
     }
   }
 
   private async _handle_round_complete() {
     const gameInfo = this.state;
+
+    // 立即广播状态，让前端知道轮次已完成，应该显示加载页面
+    await this.room.broadcast({
+      type: "game_state",
+      data: {
+        room_state: this.room.state,
+        game_state: this.state,
+        players: this.room.get_all_players(),
+      },
+    });
+
     if (gameInfo.current_round >= 5) await this._handle_game_complete();
     else await this._start_next_round();
   }
@@ -918,21 +953,18 @@ export class Game {
   }
 
   private async _start_next_round() {
-    const gameInfo = this.state;
-    const next = gameInfo.current_round + 1;
-    await this.room.broadcast({
-      type: "game_state",
-      data: {
-        room_state: this.room.state,
-        game_state: this.state,
-        players: this.room.get_all_players(),
-      },
-    });
+    const state = this.state;
+
+    // 先设置current_round
+    state.current_round = state.current_round + 1;
+
     try {
-      await this.generateRoundAnalysis(next);
+      await this.generateRoundAnalysis(state.current_round);
     } catch {}
-    await this._prepareRoundData(next);
-    gameInfo.current_round = next;
+
+    // 再准备轮次事件
+    await this.prepareRoundEvent(state.current_round);
+
     await this.room.broadcast({
       type: "game_state",
       data: {
@@ -941,21 +973,13 @@ export class Game {
         players: this.room.get_all_players(),
       },
     });
-    await this.room.broadcast({
-      type: "game_state",
-      data: {
-        room_state: this.room.state,
-        game_state: this.state,
-        players: this.room.get_all_players(),
-      },
-    });
-    this._schedulePhaseTransitions(next);
-    const key = this._taskKey(this.room.id, next);
-    this._cancelRoundTimeout(next);
+    this._schedulePhaseTransitions(state.current_round);
+    const key = this._taskKey(this.room.id, state.current_round);
+    this._cancelRoundTimeout(state.current_round);
     Game._round_timeout_tasks.set(
       key,
       setTimeout(
-        () => this._auto_submit_after_timeout(next),
+        () => this._auto_submit_after_timeout(state.current_round),
         Game.ROUND_ACTION_TIMEOUT_SECONDS * 1000
       )
     );

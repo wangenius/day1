@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useGameState } from "../context/StateContext";
-import type { Player } from "../const/const";
 
 /**
  * 当前视图类型
@@ -16,18 +15,6 @@ interface Video1Props {
 }
 
 /**
- * 角色信息接口
- */
-interface RoleInfo {
-  /** 角色ID */
-  id: string;
-  /** 角色名称 */
-  name: string;
-  /** 角色描述 */
-  description: string;
-}
-
-/**
  * 游戏加载页面组件
  * 显示玩家角色信息和过渡动画
  */
@@ -38,47 +25,6 @@ function GameLoadingPage() {
   // 添加调试日志
   console.log("GameLoadingPage - playerName:", room.player);
   console.log("GameLoadingPage - roleDefinitions:", game.state.roles);
-
-  /**
-   * 获取当前玩家的角色信息
-   * @returns 角色信息或null
-   */
-  const getCurrentPlayerRole = (): RoleInfo | null => {
-    if (!room.player) return null;
-
-    // 从players数组中找到当前玩家
-    const currentPlayer = room.state?.players.find(
-      (player: Player) => player.name === room.player
-    );
-    if (!currentPlayer || !currentPlayer.name) return null;
-
-    // 根据玩家选择的角色ID获取角色信息
-    const roleId = currentPlayer.name;
-    console.log("当前玩家角色ID:", roleId);
-
-    // 若有角色定义，优先返回定义内容；否则使用基础回退信息
-    if (game.state.roles && game.state.roles[roleId]) {
-      return {
-        id: roleId,
-        name: game.state.roles?.[roleId] || roleId,
-        description: game.state.roles?.[roleId] || "",
-      };
-    }
-
-    // 回退：在角色定义尚未下发时，使用角色ID作为展示名
-    return {
-      id: roleId,
-      name: roleId,
-      description: "",
-    };
-  };
-
-  const currentRole = getCurrentPlayerRole();
-  const roleName = currentRole ? currentRole.name : room.player;
-
-  // 添加调试日志
-  console.log("GameLoadingPage - currentRole:", currentRole);
-  console.log("GameLoadingPage - roleName:", roleName);
 
   useEffect(() => {
     // 2秒后切换到video1
@@ -112,7 +58,7 @@ function GameLoadingPage() {
     <div className="min-h-screen w-full bg-black overflow-hidden relative flex flex-col items-center justify-center p-4">
       {/* 右上角玩家名称 */}
       <div className="absolute top-4 right-4 text-right text-white text-sm font-medium font-['Space_Grotesk'] [text-shadow:_0px_2px_1px_rgb(0_0_0_/_0.25)]">
-        {roleName}
+        {room.player}
       </div>
 
       {/* 主要内容容器 */}
@@ -120,8 +66,8 @@ function GameLoadingPage() {
         {/* 角色图片 */}
         <img
           className="w-full max-w-xs h-48 object-cover rounded-lg"
-          src={`/${currentRole?.id || "CEO"}.png`}
-          alt={`${currentRole?.name || "CEO"}角色`}
+          src={`/image_${game.state.roles?.[room.player].toLowerCase()}.png`}
+          alt={`${game.state.roles?.[room.player] || "CEO"}角色`}
         />
 
         {/* 游戏规则说明 */}
@@ -135,7 +81,7 @@ function GameLoadingPage() {
 
         {/* 角色名称 */}
         <div className="text-center text-white text-xl font-normal font-['Cactus_Classical_Serif'] leading-relaxed">
-          你是{roleName}
+          你是{game.state.roles?.[room.player]}
         </div>
 
         {/* 任务描述 */}

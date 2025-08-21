@@ -17,6 +17,8 @@ export const PlayerInfo = ({
 }: PlayerInfoProps) => {
   const { game } = useGameState();
   const playerRole = game.state.roles[playerName];
+  console.log(playerRole);
+
   // 根据尺寸设置样式配置
   const sizeConfig = {
     small: {
