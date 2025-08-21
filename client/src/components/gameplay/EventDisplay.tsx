@@ -6,7 +6,6 @@ import { PlayerInfo } from "./PlayerInfo";
  */
 export const EventDisplay = ({
   onShowEventModal,
-  onShowPrivateModal,
 }: {
   onShowEventModal: () => void;
   onShowPrivateModal: () => void;
