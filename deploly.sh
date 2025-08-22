@@ -10,8 +10,8 @@ pushd ${_BASEDIR} > /dev/null
 
 # deploy front
 cd
-git pull origin main
 cd "${_FRONT_DIR}"
+git pull origin main
 npm --registry=https://registry.npmmirror.com install
 npm run build
 mkdir -p ${_DEPLOY_DIR}
