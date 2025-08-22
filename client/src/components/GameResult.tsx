@@ -30,14 +30,19 @@ function GameResult() {
 
   console.log(game.state.result);
 
-  useEffect(() => {
-    // 5秒后开始打印动画
-    const startTimer = setTimeout(() => {
-      setIsPrinting(true);
-    }, 5000);
+  // 检查是否有报告内容
+  const hasReport = game.state.result?.report && game.state.result.report.trim() !== "";
 
-    return () => clearTimeout(startTimer);
-  }, []);
+  useEffect(() => {
+    // 只有当有报告内容时才开始打印动画
+    if (hasReport) {
+      const startTimer = setTimeout(() => {
+        setIsPrinting(true);
+      }, 5000);
+
+      return () => clearTimeout(startTimer);
+    }
+  }, [hasReport]);
 
   useEffect(() => {
     if (isPrinting) {
@@ -71,6 +76,24 @@ function GameResult() {
     setPrintProgress(0);
     game.handleRestartGame();
   };
+
+  // 如果没有报告内容，显示加载动画
+  if (!hasReport) {
+    return (
+      <div className="min-h-screen w-full bg-stone-950 flex flex-col items-center justify-center">
+        <div className="text-center text-white mb-8">
+          <div className="text-xl font-normal font-['Cactus_Classical_Serif'] leading-relaxed mb-4">
+            正在生成创业报告...
+          </div>
+          <div className="flex items-center justify-center space-x-2">
+            <div className="w-3 h-3 bg-white rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+            <div className="w-3 h-3 bg-white rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+            <div className="w-3 h-3 bg-white rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative">

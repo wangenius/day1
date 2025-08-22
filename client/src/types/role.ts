@@ -1,19 +1,9 @@
 /**
- * 角色定义接口
- */
-export interface Role {
-  /** 角色ID */
-  id: string;
-  /** 角色图片路径 */
-  image: string;
-}
-
-/**
  * 角色选择相关的props接口
  */
 export interface RoleCardProps {
   /** 角色信息 */
-  role: Role;
+  role: string;
   /** 是否被当前玩家选中 */
   isSelected: boolean;
   /** 是否被其他玩家占用 */
@@ -29,7 +19,7 @@ export interface RoleCardProps {
  */
 export interface RoleListProps {
   /** 角色列表 */
-  roles: Role[];
+  roles: string[];
   /** 已选择的角色 */
   selectedRole: string | null;
   /** 当前玩家角色 */

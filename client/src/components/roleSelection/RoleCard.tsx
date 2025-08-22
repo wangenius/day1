@@ -16,7 +16,7 @@ function RoleCard({
    */
   const handleClick = () => {
     if (!isOccupied && !hasSelectedRole) {
-      onRoleSelect(role.id);
+      onRoleSelect(role);
     }
   };
 
@@ -36,8 +36,8 @@ function RoleCard({
               ? "ring-4 ring-yellow-400 ring-opacity-80 shadow-lg shadow-yellow-400/50 brightness-110"
               : "hover:brightness-110 hover:shadow-md"
           }`}
-          src={role.image}
-          alt={role.id}
+          src={`/${role}.png`}
+          alt={role}
           onClick={handleClick}
         />
 
