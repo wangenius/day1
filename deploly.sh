@@ -10,8 +10,8 @@ pushd ${_BASEDIR} > /dev/null
 
 # deploy front
 cd
-cd "${_FRONT_DIR}"
 git pull origin main
+cd "${_FRONT_DIR}"
 npm --registry=https://registry.npmmirror.com install
 npm run build
 mkdir -p ${_DEPLOY_DIR}
@@ -22,9 +22,8 @@ systemctl restart nginx.service
 # deploy back
 cd
 cd "${_BACK_DIR}"
-git pull origin main
-pip install -r requirements.txt
-python src/app.py
-
+npm --registry=https://registry.npmmirror.com install
+npm run build
+npm run start
 # recovery
 popd > /dev/null
