@@ -23,6 +23,7 @@ systemctl restart nginx.service
 cd
 cd "${_BACK_DIR}"
 npm --registry=https://registry.npmmirror.com install
+npm i
 npm run build
 npm run start
 # recovery
