@@ -32,7 +32,7 @@ function GamePlay() {
         />
       );
     }
-    if (game.state.rounds[game.state.current_round].phase_remain > 175) {
+    if (game.state.rounds[game.state.current_round].phase_remain > 160) {
       return (
         <EventDisplay
           onShowEventModal={() => setShowEventModal(true)}
@@ -40,7 +40,7 @@ function GamePlay() {
         />
       );
     }
-    if (game.state.rounds[game.state.current_round].phase_remain > 170) {
+    if (game.state.rounds[game.state.current_round].phase_remain > 120) {
       return (
         <InfoAndOptions
           onShowEventModal={() => setShowEventModal(true)}

@@ -1,4 +1,4 @@
-import GameLoadingPage from "./components/GameLoadingPage";
+import { GameLoadingPage } from "./components/GameLoadingPage";
 import GamePlay from "./components/gameplay/GamePlay";
 import GameResult from "./components/GameResult";
 import { InitialPage } from "./components/InitialPage";
@@ -24,6 +24,8 @@ function App() {
       case "waiting":
         return <RoomLobby />;
     }
+
+    console.log(game.state.state);
     if (game.state.state === "playing") {
       if (Object.keys(game.state.ideas).length < room.state.players.length) {
         return <IdeaPickerInRoom />;
@@ -36,14 +38,18 @@ function App() {
       }
       // 检查是否所有玩家都已提交
       const currentRound = game.state.rounds[game.state.current_round];
-      const allPlayersSubmitted = currentRound && 
-        Object.keys(currentRound.player_actions || {}).length === room.state.players.length;
-      
+      const allPlayersSubmitted =
+        currentRound &&
+        Object.keys(currentRound.player_actions || {}).length ===
+          room.state.players.length;
+
       if (
         game.state.rounds[game.state.current_round] === undefined ||
         game.state.rounds[game.state.current_round].phase_remain === 0 ||
         !game.state.rounds[game.state.current_round].situation ||
-        Object.keys(game.state.rounds[game.state.current_round].decision_options || {}).length === 0 ||
+        Object.keys(
+          game.state.rounds[game.state.current_round].decision_options || {}
+        ).length === 0 ||
         allPlayersSubmitted
       ) {
         return <RoundLoadingPage />;

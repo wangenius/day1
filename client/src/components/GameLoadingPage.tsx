@@ -1,285 +1,162 @@
 import { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import type { GameResult as GameResultType } from "../const/const";
 import { useGameState } from "../context/StateContext";
 
 /**
- * 打印机效果组件属性
+ * 当前视图类型
  */
-interface PrinterEffectProps {
-  /** 是否正在打印 */
-  isPrinting: boolean;
-  /** 打印进度 */
-  printProgress: number;
-  /** 开始打印回调 */
-  onStartPrint: () => void;
-  /** 重新开始回调 */
-  onRestart: () => void;
-  /** 游戏结果 */
-  gameResult: GameResultType | null;
+type CurrentView = "loading" | "video1" | "video2";
+
+/**
+ * Video1组件属性
+ */
+interface Video1Props {
+  /** 视频播放结束回调 */
+  onEnded: () => void;
 }
 
 /**
- * 游戏结果组件
- * 显示游戏结束后的结果和打印效果
+ * 游戏加载页面组件
+ * 显示玩家角色信息和过渡动画
  */
-function GameResult() {
-  const { game } = useGameState();
-  const [isPrinting, setIsPrinting] = useState<boolean>(false);
-  const [printProgress, setPrintProgress] = useState<number>(0);
+export function GameLoadingPage() {
+  const { room, game } = useGameState();
+  const [currentView, setCurrentView] = useState<CurrentView>("loading");
 
-  console.log(game.state.result);
+  // 添加调试日志
+  console.log("GameLoadingPage - playerName:", room.player);
+  console.log("GameLoadingPage - roleDefinitions:", game.state.roles);
 
   useEffect(() => {
-    // 5秒后开始打印动画
-    const startTimer = setTimeout(() => {
-      setIsPrinting(true);
+    // 2秒后切换到video1
+    const timer = setTimeout(() => {
+      setCurrentView("video1");
     }, 5000);
 
-    return () => clearTimeout(startTimer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, []);
 
-  useEffect(() => {
-    if (isPrinting) {
-      // 打印动画，3秒内从0到100
-      const interval = setInterval(() => {
-        setPrintProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            return 100;
-          }
-          return prev + 2; // 每50ms增加2%
-        });
-      }, 50);
-
-      return () => clearInterval(interval);
-    }
-  }, [isPrinting]);
-
   /**
-   * 处理开始打印
+   * 处理video1播放结束后切换到video2
    */
-  const handleStartPrint = (): void => {
-    setIsPrinting(true);
+  const handleVideo1Ended = (): void => {
+    setCurrentView("video2");
   };
 
-  /**
-   * 处理重新开始
-   */
-  const handleRestart = (): void => {
-    setIsPrinting(false);
-    setPrintProgress(0);
-    game.handleRestartGame();
-  };
+  // 根据当前状态渲染不同的视图
+  if (currentView === "video1") {
+    return <Video1 onEnded={handleVideo1Ended} />;
+  }
 
+  if (currentView === "video2") {
+    return <Video2 />;
+  }
+
+  // 默认显示加载页面
   return (
-    <div className="relative">
-      <PrinterEffect
-        isPrinting={isPrinting}
-        printProgress={printProgress}
-        onStartPrint={handleStartPrint}
-        onRestart={handleRestart}
-        gameResult={game.state.result}
-      />
+    <div className="min-h-screen w-full bg-black overflow-hidden relative flex flex-col items-center justify-center p-4">
+      {/* 右上角玩家名称 */}
+      <div className="absolute top-4 right-4 text-right text-white text-sm font-medium font-['Space_Grotesk'] [text-shadow:_0px_2px_1px_rgb(0_0_0_/_0.25)]">
+        {room.player}
+      </div>
+
+      {/* 主要内容容器 */}
+      <div className="w-full max-w-sm mx-auto flex flex-col items-center space-y-6">
+        {/* 角色图片 */}
+        <img
+          className="w-full max-w-xs h-48 object-cover rounded-lg"
+          src={`/image_${game.state.roles?.[room.player].toLowerCase()}.png`}
+          alt={`${game.state.roles?.[room.player] || "CEO"}角色`}
+        />
+
+        {/* 游戏规则说明 */}
+        <div className="text-center text-white text-lg font-normal font-['Cactus_Classical_Serif'] leading-relaxed mb-4">
+          <div className="text-yellow-300 text-xl mb-2">游戏规则</div>
+          每个角色都有双重任务：
+          <br />
+          <span className="text-green-300">让公司变得更好</span> +{" "}
+          <span className="text-blue-300">让自己职业生涯变得更好</span>
+        </div>
+
+        {/* 角色名称 */}
+        <div className="text-center text-white text-xl font-normal font-['Cactus_Classical_Serif'] leading-relaxed">
+          你是{game.state.roles?.[room.player]}
+        </div>
+
+        {/* 任务描述 */}
+        <div className="text-center text-white text-xl font-normal font-['Cactus_Classical_Serif'] leading-relaxed">
+          你的目标是平衡两个任务
+          <br />
+          带领公司成功上市，估值一千万！
+        </div>
+
+        {/* 加载动画和"即将开始"文字 */}
+        <div className="flex flex-col items-center space-y-4">
+          <video
+            className="w-24 h-24"
+            src="/videoExport-2025-07-26@12-08-48.606-540x540@60fps.mp4"
+            autoPlay
+            loop
+            controls={false}
+          />
+          <div className="text-center text-white text-xl font-normal font-['Cactus_Classical_Serif'] leading-relaxed">
+            即将开始
+          </div>
+        </div>
+
+        {/* 进度条 */}
+        <div className="w-full max-w-xs relative">
+          <div className="w-full h-[3px] bg-neutral-400 rounded-[1px]" />
+          <div className="w-0.5 h-[3px] absolute top-0 left-0 bg-slate-300 rounded-[1px]" />
+        </div>
+      </div>
     </div>
   );
 }
 
 /**
- * 打印机效果组件
- * 模拟打印机打印报告的效果
+ * Video1组件 - 第一个过渡视频
  */
-function PrinterEffect({
-  isPrinting,
-  printProgress,
-  onStartPrint,
-  onRestart,
-  gameResult,
-}: PrinterEffectProps) {
-  const handleExport = (): void => {
-    const content = gameResult?.report ?? "";
-    if (!content) return;
-    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    const dateStr = new Date().toISOString().slice(0, 10);
-    anchor.href = url;
-    anchor.download = `final_report_${dateStr}.md`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-  };
+function Video1({ onEnded }: Video1Props) {
   return (
     <div className="min-h-screen w-full bg-stone-950 overflow-hidden relative flex flex-col">
-      {/* 打印机背景 */}
-      <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-0">
-        <img
-          className="w-full h-auto object-contain"
-          src="./print.png"
-          alt="打印机"
-        />
+      <video
+        className="w-full flex-1 object-cover"
+        src="/first scene.mp4"
+        autoPlay
+        muted
+        controls={false}
+        onEnded={onEnded}
+      />
+
+      {/* 文字描述 */}
+      <div className="p-6 text-center text-white text-xl font-normal font-['Cactus_Classical_Serif'] leading-loose">
+        故事始于一阵短暂而耀眼的黑客松胜利。那是一场持续48小时不眠不休的鏖战，在评委念出他们团队名字的瞬间，一切的疲惫都化作了震耳欲聋的欢呼与香槟泡沫。
       </div>
-
-      {/* 右上角导出按钮 */}
-      <div className="absolute top-4 right-4 z-30">
-        <button
-          onClick={handleExport}
-          disabled={!gameResult?.report}
-          className="bg-white text-black px-4 py-2 rounded-lg shadow hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          导出
-        </button>
-      </div>
-
-      {/* 初始状态内容 */}
-      {!isPrinting && (
-        <div className="flex-1 flex flex-col items-center justify-center z-10 p-4">
-          <div className="text-center text-white text-xl font-normal font-['Cactus_Classical_Serif'] leading-relaxed mb-8">
-            五个月过去了
-            <br />
-            你们4个人的小团队
-          </div>
-
-          {/* 手动开始按钮 */}
-          <button
-            onClick={onStartPrint}
-            className="bg-white text-black px-6 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-          >
-            开始打印报告
-          </button>
-        </div>
-      )}
-
-      {/* 打印中的纸张效果 */}
-      {isPrinting && (
-        <div className="flex-1 flex items-center justify-center z-10 p-4">
-          {/* 打印纸张 */}
-          <div
-            className="w-full max-w-sm bg-gradient-to-b from-gray-200 to-zinc-100 rounded-sm relative transition-all duration-300 ease-out mx-auto"
-            style={{
-              height: `${Math.min(printProgress * 6, 600)}px`,
-              transform: `translateY(${Math.max(
-                150 - printProgress * 1.5,
-                0
-              )}px)`,
-            }}
-          >
-            {/* Day1 标签 */}
-            {printProgress > 10 && (
-              <div className="absolute left-2 top-2 transform w-10 h-10 bg-white rounded-md flex items-center justify-center animate-fadeIn">
-                <span className="text-black text-sm font-normal font-['IdeaFonts_YouQiTi']">
-                  Day1
-                </span>
-              </div>
-            )}
-
-            {/* 打印内容 - 逐步显示 */}
-            <div className="p-6 text-zinc-800 text-base font-normal font-['Cactus_Classical_Serif'] leading-relaxed space-y-3 overflow-y-auto max-h-[500px]">
-              {printProgress > 20 && (
-                <div className="text-center font-semibold text-lg mb-4 animate-slideDown">
-                  创业结局报告
-                </div>
-              )}
-
-              {gameResult?.report && (
-                <div className="markdown prose prose-sm max-w-none">
-                  <ReactMarkdown
-                    components={{
-                      h1: ({ children }) => (
-                        <h1 className="text-xl font-bold text-primary mb-3">
-                          {children}
-                        </h1>
-                      ),
-                      h2: ({ children }) => (
-                        <h2 className="text-lg font-semibold text-primary mb-2">
-                          {children}
-                        </h2>
-                      ),
-                      h3: ({ children }) => (
-                        <h3 className="text-base font-medium text-primary mb-2">
-                          {children}
-                        </h3>
-                      ),
-                      p: ({ children }) => (
-                        <p className="mb-3 leading-relaxed">{children}</p>
-                      ),
-                      ul: ({ children }) => (
-                        <ul className="mb-3 pl-4 space-y-1">{children}</ul>
-                      ),
-                      ol: ({ children }) => (
-                        <ol className="mb-3 pl-4 space-y-1 list-decimal">
-                          {children}
-                        </ol>
-                      ),
-                      li: ({ children }) => (
-                        <li className="text-zinc-700 leading-relaxed">
-                          {children}
-                        </li>
-                      ),
-                      strong: ({ children }) => (
-                        <strong className="font-semibold">{children}</strong>
-                      ),
-                      em: ({ children }) => (
-                        <em className="italic text-zinc-600">{children}</em>
-                      ),
-                      blockquote: ({ children }) => (
-                        <blockquote className="border-l-4 border-zinc-300 pl-4 my-3 text-zinc-600 italic">
-                          {children}
-                        </blockquote>
-                      ),
-                      code: ({ children }) => (
-                        <code className="bg-zinc-100 text-zinc-800 px-1 py-0.5 rounded text-sm font-mono">
-                          {children}
-                        </code>
-                      ),
-                      pre: ({ children }) => (
-                        <pre className="bg-zinc-100 p-3 rounded overflow-x-auto mb-3">
-                          {children}
-                        </pre>
-                      ),
-                    }}
-                  >
-                    {gameResult.report}
-                  </ReactMarkdown>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 底部标题和重新开始按钮 - 打印完成后显示 */}
-      {printProgress >= 100 && (
-        <div className="flex flex-col items-center justify-center pb-8 text-center z-20 animate-fadeIn">
-          <div className="text-zinc-600 text-2xl font-normal font-['FZLanTingHeiS-H-GB'] leading-loose tracking-[3.84px] mb-4">
-            创业报告
-          </div>
-          <button
-            onClick={onRestart}
-            className="bg-white text-black px-6 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium shadow-lg"
-          >
-            重新开始
-          </button>
-        </div>
-      )}
-
-      {/* 打印进度指示器 */}
-      {isPrinting && printProgress < 100 && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 text-white px-4 py-2 rounded-lg z-30">
-          <div className="text-sm mb-1">
-            正在打印... {Math.round(printProgress)}%
-          </div>
-          <div className="w-32 h-2 bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-white transition-all duration-100 ease-out"
-              style={{ width: `${printProgress}%` }}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-export default GameResult;
+/**
+ * Video2组件 - 第二个过渡视频
+ */
+function Video2() {
+  return (
+    <div className="min-h-screen w-full bg-stone-950 overflow-hidden relative flex flex-col">
+      {/* 视频 */}
+      <video
+        className="w-full flex-1 object-cover"
+        src="/second scene.mp4"
+        autoPlay
+        muted
+        controls={false}
+      />
+
+      {/* 文字描述 */}
+      <div className="p-6 text-center text-white text-xl font-normal font-['Cactus_Classical_Serif'] leading-loose">
+        但优胜的甘甜味道很快在舌尖散去。真正的战场，是在深夜的办公间——伴随着速溶咖啡的苦涩和白板上反复修改的草图。团队带着黑客松的奖金，和对未来的憧憬，在这里开始锻造他们的第一个产品原型。
+      </div>
+    </div>
+  );
+}
