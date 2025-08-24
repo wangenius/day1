@@ -1,6 +1,6 @@
 import { Game } from "./Game.js";
 import { Player } from "./Player.js";
-import { RoomStatus, RoleEnum, PlayerState, GameState } from "./types/types.js";
+import { GameState, PlayerState, RoomStatus } from "./types/types.js";
 import { logger } from "./utils/logger.js";
 
 /**
@@ -15,7 +15,7 @@ import { logger } from "./utils/logger.js";
  * 设计模式：
  * - 工厂模式：通过静态方法创建和管理房间实例
  * - 单例管理：通过静态字典确保房间ID唯一性
- * - 观察者模式：消息广播机制向所有玩家同步状态
+ * - 观察者模式：消息广播机制向所有玩家同步i状态
  */
 export class Room {
   /** 全局房间存储字典 - 静态管理所有房间实例，最多支持10个房间 */

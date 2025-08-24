@@ -11,7 +11,6 @@ export function InitialPage() {
     <div
       className="min-h-screen w-full bg-stone-950 overflow-hidden cursor-pointer hover:opacity-90 transition-opacity flex flex-col justify-between p-4"
       onClick={() => {
-        console.log(room.player);
         if (!room.player) {
           room.setRoomState("username");
         } else {
@@ -19,7 +18,6 @@ export function InitialPage() {
         }
       }}
     >
-      {/* 顶部Day1标签 */}
       <div className="flex justify-center pt-8">
         <div className="w-28 h-28 bg-white rounded-[20px] flex items-center justify-center">
           <div className="text-black text-4xl font-normal font-['IdeaFonts_YouQiTi']">
@@ -44,23 +42,23 @@ export function InitialPage() {
           {/* 主要角色图片 */}
           <img
             className="w-32 h-32 mx-auto relative z-10"
-            src="./image (1).png"
+            src="./image_cmo.png"
             alt="主角色"
           />
           {/* 背景角色图片 */}
           <img
             className="w-28 h-28 absolute left-4 bottom-0 opacity-70"
-            src="./image (2).png"
+            src="./image_ceo.png"
             alt="角色2"
           />
           <img
             className="w-24 h-24 absolute left-0 bottom-4 opacity-50"
-            src="./image (3).png"
+            src="./image_cto.png"
             alt="角色3"
           />
           <img
             className="w-20 h-20 absolute right-4 bottom-0 opacity-70"
-            src="./image (4).png"
+            src="./image_coo.png"
             alt="角色4"
           />
         </div>

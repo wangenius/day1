@@ -173,7 +173,7 @@ export function useGame(params: UseGameParams): UseGameReturn {
       console.log("提交当前选择", action);
       console.log(webSocket.connected);
       if (webSocket.connected) {
-        console.log("提交当前选择", action);
+        console.log("提交当前选择", action, "当前轮次:", state.current_round);
         webSocket.send({
           type: "game_action",
           data: {
@@ -186,7 +186,7 @@ export function useGame(params: UseGameParams): UseGameReturn {
         });
       }
     },
-    [room.player, webSocket.connected]
+    [room.player, webSocket.connected, state.current_round]
   );
 
   useEffect(() => {
