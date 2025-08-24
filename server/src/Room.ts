@@ -86,15 +86,26 @@ export class Room {
    *
    * @param player_name 目标玩家名称
    * @param message 要发送的消息对象
+   * @returns 是否发送成功
    */
-  async send_to_player(player_name: string, message: any) {
+  async send_to_player(player_name: string, message: any): Promise<boolean> {
     const p = this.get_player(player_name);
     const ws = p?.socket;
-    if (!ws || ws.readyState !== ws.OPEN) return;
+    if (!ws || ws.readyState !== ws.OPEN) {
+      logger.warn(`无法向玩家 ${player_name} 发送消息：连接不可用`);
+      return false;
+    }
     try {
       ws.send(JSON.stringify(message));
-    } catch {
-      // ignore
+      return true;
+    } catch (error) {
+      logger.error(`向玩家 ${player_name} 发送消息失败:`, error);
+      // 连接异常时标记玩家为离线
+      if (p) {
+        p.is_online = false;
+        p.socket = undefined;
+      }
+      return false;
     }
   }
 
@@ -106,6 +117,7 @@ export class Room {
    * - 支持排除特定玩家（如发送者本人）
    * - 自动跳过离线或连接异常的玩家
    * - 返回实际发送成功的玩家数量
+   * - 自动处理发送失败的连接
    *
    * 使用场景：
    * - 游戏状态同步
@@ -127,13 +139,31 @@ export class Room {
     };
   }) {
     let sent = 0;
+    const failed_players: string[] = [];
+    
     for (const p of Array.from(this.players.values())) {
       if (!p.is_online) continue;
       const ws = p?.socket;
-      if (!ws || ws.readyState !== ws.OPEN) continue;
-      await this.send_to_player(p.name, message);
-      sent++;
+      if (!ws || ws.readyState !== ws.OPEN) {
+        // 连接不可用，标记为离线
+        p.is_online = false;
+        p.socket = undefined;
+        failed_players.push(p.name);
+        continue;
+      }
+      
+      const success = await this.send_to_player(p.name, message);
+      if (success) {
+        sent++;
+      } else {
+        failed_players.push(p.name);
+      }
     }
+    
+    if (failed_players.length > 0) {
+      logger.warn(`广播消息失败的玩家: ${failed_players.join(', ')}`);
+    }
+    
     return sent;
   }
 

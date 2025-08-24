@@ -183,12 +183,25 @@ export class Player implements PlayerState {
 
     // ========== 第七步：记录玩家上线日志 ==========
     // 在服务器日志中记录玩家上线事件，便于调试和监控
-    logger.info(`玩家 ${player_id} 上线`);
+    logger.info(`玩家 ${player_id} ${is_reconnect ? '重连' : '上线'}`);
 
+    // 广播玩家状态变化
     await room.broadcast({
       type: "players",
       data: { players: players },
     });
+
+    // 如果是重连，额外广播完整游戏状态确保同步
+    if (is_reconnect) {
+      await room.broadcast({
+        type: "game_state",
+        data: {
+          room_state: room.state,
+          game_state: room.game.state,
+          players: players,
+        },
+      });
+    }
 
     const connection_data = {
       type: "success", // 消息类型：连接成功
@@ -243,10 +256,21 @@ export class Player implements PlayerState {
 
         room.offline_player(player_id);
 
+        // 广播玩家状态变化和完整游戏状态
         if (other_online.length) {
           await room.broadcast({
             type: "players",
             data: {
+              players: room.get_all_players(),
+            },
+          });
+          
+          // 同时广播完整的游戏状态，确保其他玩家状态同步
+          await room.broadcast({
+            type: "game_state",
+            data: {
+              room_state: room.state,
+              game_state: room.game.state,
               players: room.get_all_players(),
             },
           });

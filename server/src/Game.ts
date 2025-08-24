@@ -621,22 +621,43 @@ export class Game {
   }
 
   private _startRoundTick() {
-    const existed = Game._round_tick_tasks.get(this.room.id);
-    if (existed) clearInterval(existed);
+    const current_round = this.state.current_round;
+    const tickKey = this._taskKey(this.room.id, current_round);
+    
+    // 清理旧的tick任务
+    const existed = Game._round_tick_tasks.get(tickKey);
+    if (existed) {
+      clearInterval(existed);
+      Game._round_tick_tasks.delete(tickKey);
+    }
+    
     const timer = setInterval(async () => {
       try {
-        if (!this.room || this.room.state !== RoomStatus.PLAYING)
-          return clearInterval(timer);
+        if (!this.room || this.room.state !== RoomStatus.PLAYING) {
+          clearInterval(timer);
+          Game._round_tick_tasks.delete(tickKey);
+          return;
+        }
+        
         const gameInfo = this.state;
-        const current_round = gameInfo.current_round;
-        const roundInfo = gameInfo.rounds[current_round];
+        const tick_round = gameInfo.current_round;
+        
+        // 如果轮次已经改变，停止当前tick
+        if (tick_round !== current_round) {
+          logger.info(`[TICK] Round changed from ${current_round} to ${tick_round}, stopping tick`);
+          clearInterval(timer);
+          Game._round_tick_tasks.delete(tickKey);
+          return;
+        }
+        
+        const roundInfo = gameInfo.rounds[tick_round];
 
         // 更新剩余时间
         if (roundInfo && typeof roundInfo.phase_remain === "number") {
           roundInfo.phase_remain = Math.max(roundInfo.phase_remain - 1, 0);
         }
 
-        if (this.room)
+        if (this.room) {
           await this.room.broadcast({
             type: "game_state",
             data: {
@@ -645,18 +666,24 @@ export class Game {
               players: this.room.get_all_players(),
             },
           });
+        }
+        
+        // 检查是否需要自动提交
         if (
           roundInfo?.phase_remain === 0 &&
-          !this._allPlayersSubmitted(current_round)
+          !this._allPlayersSubmitted(tick_round)
         ) {
-          await this._autoSubmitMissingPlayers(current_round, "phase_end_auto");
+          await this._autoSubmitMissingPlayers(tick_round, "phase_end_auto");
         }
       } catch (e) {
         logger.error("[TICK] error:", (e as any)?.message || e);
         clearInterval(timer);
+        Game._round_tick_tasks.delete(tickKey);
       }
     }, 1000);
-    Game._round_tick_tasks.set(this.room.id, timer);
+    
+    Game._round_tick_tasks.set(tickKey, timer);
+    logger.info(`[TICK] Started tick for round ${current_round}, key: ${tickKey}`);
   }
 
   /**
@@ -757,18 +784,22 @@ export class Game {
 
   async handle_start_game(player_name: string) {
     const player = this.room.get_player(player_name);
-    if (!player || !player.is_host) return;
-    console.log(this.room.state, RoomStatus.WAITING);
-    if (this.room.state !== RoomStatus.WAITING) return;
-    await this.room.broadcast({
-      type: "game_state",
-      data: {
-        room_state: this.room.state,
-        game_state: this.state,
-        players: this.room.get_all_players(),
-      },
-    });
+    if (!player || !player.is_host) {
+      logger.warn(`[START_GAME] Player ${player_name} is not host or not found`);
+      return;
+    }
+    
+    if (this.room.state !== RoomStatus.WAITING) {
+      logger.warn(`[START_GAME] Room state is not WAITING: ${this.room.state}`);
+      return;
+    }
+    
+    logger.info(`[START_GAME] Starting game in room ${this.room.id}`);
+    
+    // 更新房间状态为游戏中
     this.room.state = RoomStatus.PLAYING;
+    
+    // 广播游戏开始状态
     await this.room.broadcast({
       type: "game_state",
       data: {
@@ -777,6 +808,8 @@ export class Game {
         players: this.room.get_all_players(),
       },
     });
+    
+    logger.info(`[START_GAME] Game started successfully in room ${this.room.id}`);
   }
 
   /**
@@ -922,6 +955,12 @@ export class Game {
       return;
     }
     
+    // 防止在轮次完成过程中接收新的行动
+    if (this._round_completing) {
+      logger.warn(`[GAME_ACTION] Round is completing, ignoring action from ${player_name}`);
+      return;
+    }
+    
     const gameInfo = this.state;
     const current_round = gameInfo.current_round;
     const submitted_round = action_data?.round;
@@ -929,6 +968,13 @@ export class Game {
     // 验证提交的轮次是否与当前轮次匹配
     if (submitted_round && submitted_round !== current_round) {
       logger.warn(`[GAME_ACTION] Player ${player_name} submitted action for round ${submitted_round}, but current round is ${current_round}. Ignoring outdated action.`);
+      return;
+    }
+    
+    // 检查玩家是否已经提交过行动
+    const roundInfo = gameInfo.rounds[current_round];
+    if (roundInfo && roundInfo.player_actions[player_name]) {
+      logger.warn(`[GAME_ACTION] Player ${player_name} already submitted action for round ${current_round}, ignoring duplicate`);
       return;
     }
     
@@ -948,7 +994,6 @@ export class Game {
 
     if (this._allPlayersSubmitted(current_round)) {
       logger.info(`[GAME_ACTION] All players submitted for round ${current_round}, completing round`);
-      this._cancelRoundTimeout(current_round);
       await this._handle_round_complete();
     } else {
       logger.info(`[GAME_ACTION] Waiting for more players to submit for round ${current_round}`);
@@ -976,6 +1021,16 @@ export class Game {
       }
 
       this._processing_round = current_round;
+
+      // 清理当前轮次的定时器
+      this._cancelRoundTimeout(current_round);
+      const tickKey = this._taskKey(this.room.id, current_round);
+      const tickTask = Game._round_tick_tasks.get(tickKey);
+      if (tickTask) {
+        clearInterval(tickTask);
+        Game._round_tick_tasks.delete(tickKey);
+        logger.info(`[ROUND_COMPLETE] Cancelled tick task for round ${current_round}`);
+      }
 
       // 立即广播状态，让前端知道轮次已完成，应该显示加载页面
       await this.room.broadcast({
@@ -1044,13 +1099,7 @@ export class Game {
     
     logger.info(`[START_NEXT_ROUND] Updated current_round to ${new_round}`);
 
-    await this.generateRoundAnalysis(new_round);
-    logger.info(`[START_NEXT_ROUND] Generated round analysis for round ${new_round}`);
-
-    // 再准备轮次事件
-    await this.prepareRoundEvent(new_round);
-    logger.info(`[START_NEXT_ROUND] Prepared round event for round ${new_round}`);
-
+    // 立即广播轮次切换状态，让所有玩家知道正在准备新轮次
     await this.room.broadcast({
       type: "game_state",
       data: {
@@ -1060,7 +1109,26 @@ export class Game {
       },
     });
     
-    logger.info(`[START_NEXT_ROUND] Broadcasted game state for round ${new_round}`);
+    logger.info(`[START_NEXT_ROUND] Broadcasted initial state for round ${new_round}`);
+
+    await this.generateRoundAnalysis(new_round);
+    logger.info(`[START_NEXT_ROUND] Generated round analysis for round ${new_round}`);
+
+    // 再准备轮次事件
+    await this.prepareRoundEvent(new_round);
+    logger.info(`[START_NEXT_ROUND] Prepared round event for round ${new_round}`);
+
+    // 再次广播完整的轮次数据
+    await this.room.broadcast({
+      type: "game_state",
+      data: {
+        room_state: this.room.state,
+        game_state: this.state,
+        players: this.room.get_all_players(),
+      },
+    });
+    
+    logger.info(`[START_NEXT_ROUND] Broadcasted complete game state for round ${new_round}`);
     
     this._schedulePhaseTransitions(new_round);
     const key = this._taskKey(this.room.id, new_round);
@@ -1095,7 +1163,16 @@ export class Game {
   }
 
   private async _auto_submit_after_timeout(round_num: number) {
-    if (this.room.state !== RoomStatus.PLAYING) return;
+    if (this.room.state !== RoomStatus.PLAYING) {
+      logger.info(`[TIMEOUT] Room not in PLAYING state, skipping timeout for round ${round_num}`);
+      return;
+    }
+    
+    // 防止在轮次完成过程中触发超时
+    if (this._round_completing) {
+      logger.info(`[TIMEOUT] Round ${round_num} is completing, skipping timeout`);
+      return;
+    }
     
     logger.info(`[TIMEOUT] Auto-submitting for round ${round_num}`);
     
@@ -1105,8 +1182,13 @@ export class Game {
       return;
     }
     
-    // 只执行自动提交，不直接调用_handle_round_complete
-    // _autoSubmitMissingPlayers会通过handle_game_action触发轮次完成逻辑
-    await this._autoSubmitMissingPlayers(round_num, "round_timeout_auto");
+    // 检查是否所有玩家都已提交
+    if (this._allPlayersSubmitted(round_num)) {
+      logger.info(`[TIMEOUT] All players already submitted for round ${round_num}, no timeout needed`);
+      return;
+    }
+    
+    // 执行自动提交，使用timeout原因
+    await this._autoSubmitMissingPlayers(round_num, "timeout");
   }
 }

@@ -214,11 +214,11 @@ export function useGame(params: UseGameParams): UseGameReturn {
           game_state: GameInfo;
         };
 
-        console.log(data);
+        console.log("[GAME_STATE] Received:", data);
         room.setRoomState(data.room_state);
-        setState((prevState: GameInfo) => {
-          return { ...prevState, ...data.game_state };
-        });
+        
+        // 完全替换游戏状态，避免状态合并导致的不一致
+        setState(data.game_state);
       }
     });
   }, [webSocket.connected]);
