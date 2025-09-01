@@ -276,7 +276,17 @@ export class Player implements PlayerState {
           });
         }
 
-        if (room.get_online_players().length === 0) Room.remove(room.id);
+        // 延迟检查房间是否需要移除
+        if (room.get_online_players().length === 0) {
+          // 延迟1分钟后再次检查在线玩家数
+          setTimeout(() => {
+            const currentRoom = Room.get(room.id);
+            if (currentRoom && currentRoom.get_online_players().length === 0) {
+              Room.remove(room.id);
+              logger.info(`房间 ${room.id} 因无在线玩家而被移除`);
+            }
+          }, 60000); // 60秒 = 1分钟
+        }
       }
 
       try {

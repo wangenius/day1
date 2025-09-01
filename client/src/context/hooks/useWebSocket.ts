@@ -101,7 +101,7 @@ const { ws } = getServerConfig();
  *     removeListener(listener2);
  *     disconnect();
  *   };
- * }, []);
+ * }, [connect]);
 
 
  *   send({
@@ -121,6 +121,10 @@ export function useWebSocket(): UseWebSocketReturn {
   );
   /** 监听器ID计数器 */
   const listenerIdCounterRef = useRef<number>(0);
+  /** 心跳检测定时器引用 */
+  const heartbeatTimerRef = useRef<number | null>(null);
+  /** 重连参数存储 */
+  const reconnectParamsRef = useRef<{ player: string; roomId: string } | null>(null);
 
   // 组件卸载时清理连接和所有监听器
   useEffect(() => {
@@ -129,9 +133,15 @@ export function useWebSocket(): UseWebSocketReturn {
         wsRef.current.close();
         wsRef.current = null;
       }
+      if (heartbeatTimerRef.current) {
+        clearInterval(heartbeatTimerRef.current);
+        heartbeatTimerRef.current = null;
+      }
       listenersRef.current.clear();
     };
   }, []);
+
+
 
   /**
    * 执行所有监听器
@@ -187,6 +197,13 @@ export function useWebSocket(): UseWebSocketReturn {
       wsRef.current = null;
       setConnected(false);
     }
+    // 停止心跳检测
+    if (heartbeatTimerRef.current) {
+      clearInterval(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = null;
+    }
+    // 清理重连参数
+    reconnectParamsRef.current = null;
     // 清理所有监听器
     listenersRef.current.clear();
   }, []);
@@ -202,6 +219,9 @@ export function useWebSocket(): UseWebSocketReturn {
         return console.log(
           `🔌 参数验证失败 - 玩家: "${player}", 房间: "${roomId}"`
         );
+
+      // 保存重连参数
+      reconnectParamsRef.current = { player, roomId };
 
       wsRef.current = new WebSocket(ws);
 
@@ -233,6 +253,23 @@ export function useWebSocket(): UseWebSocketReturn {
               }
             };
           }
+
+          // 启动心跳检测
+          if (heartbeatTimerRef.current) {
+            clearInterval(heartbeatTimerRef.current);
+          }
+          heartbeatTimerRef.current = setInterval(() => {
+            if (wsRef.current && 
+                (wsRef.current.readyState === WebSocket.CLOSED || 
+                 wsRef.current.readyState === WebSocket.CLOSING)) {
+              console.log('🔌 检测到WebSocket连接断开，尝试重连...');
+              setConnected(false);
+              if (reconnectParamsRef.current) {
+                const { player: reconnectPlayer, roomId: reconnectRoomId } = reconnectParamsRef.current;
+                setTimeout(() => connect(reconnectPlayer, reconnectRoomId), 1000); // 延迟1秒重连
+              }
+            }
+          }, 5000); // 每5秒检测一次
         }
       };
 
