@@ -6,7 +6,7 @@ import { logger } from "./logger.js";
 
 config();
 
-const DEFAULT_MODEL = "zai-org/glm-4.5";
+const DEFAULT_MODEL = "glm-4.5-flash";
 
 // Create PPIO provider
 function createPPIOProvider({
