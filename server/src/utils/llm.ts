@@ -39,7 +39,10 @@ export class LLM {
     this.model = model || DEFAULT_MODEL;
 
     logger.info("LLM model:", this.model);
-    logger.info("LLM apiKey:", this.apiKey);
+    logger.info(
+      "LLM apiKey configured:",
+      this.apiKey ? `${this.apiKey.slice(0, 4)}***` : "missing"
+    );
     logger.info("LLM baseURL:", this.baseURL);
     this.client = createPPIOProvider({
       apiKey: this.apiKey,

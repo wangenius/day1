@@ -34,5 +34,5 @@ export const getServerConfig = (): ServerConfig => {
   }
 
   // 生产环境：使用相对路径
-  return { http: `/api`, ws: `wss://day1.zone/api/ws` };
+  return { http: `/api`, ws: `wss://game.day1.zone/api/ws` };
 };
