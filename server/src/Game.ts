@@ -159,23 +159,6 @@ export class Game {
     return parts.join("\n\n");
   }
 
-  private static _validateEventResponse(resp: any) {
-    if (typeof resp !== "object" || !resp) return false;
-    if (!resp.event || typeof resp.event !== "object") return false;
-    const e = resp.event;
-    if (
-      !("event_title" in e) ||
-      !("event_description" in e) ||
-      !("decision_options" in e)
-    )
-      return false;
-    if (!resp.private_messages || typeof resp.private_messages !== "object")
-      return false;
-    for (const role of ["CEO", "CTO", "CMO", "COO"])
-      if (!(role in resp.private_messages)) return false;
-    return true;
-  }
-
   private _allPlayersSubmitted(round_num: number) {
     // 验证轮次状态一致性
     if (this.state.current_round !== round_num) {

@@ -1,33 +1,30 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateText, generateObject } from "ai";
 import { config } from "dotenv";
 import { z } from "zod";
 import { logger } from "./logger.js";
+import OpenAI from "openai";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 config();
 
-const DEFAULT_MODEL = "glm-4.5-flash";
+const DEFAULT_MODEL = "gpt-5";
+const DEFAULT_BASE_URL = "https://api.ppio.ai/v1";
 
-// Create PPIO provider
-function createPPIOProvider({
-  apiKey,
-  baseURL,
-}: {
-  apiKey?: string;
-  baseURL?: string;
-}) {
-  return createOpenAICompatible({
-    name: "ppio",
-    apiKey: apiKey || process.env.PPIO_API_KEY || "",
-    baseURL: baseURL || process.env.PPIO_BASE_URL || "https://api.ppio.ai/v1",
-  });
-}
+const normalizeBaseURL = (url?: string): string => {
+  if (!url) return DEFAULT_BASE_URL;
+  const trimmed = url.trim();
+  if (!trimmed) return DEFAULT_BASE_URL;
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+  if (withoutTrailingSlash.endsWith("/chat")) {
+    return withoutTrailingSlash.slice(0, withoutTrailingSlash.length - 5);
+  }
+  return withoutTrailingSlash;
+};
 
 export class LLM {
   private apiKey?: string;
   private baseURL?: string;
   private model: string;
-  private client: ReturnType<typeof createPPIOProvider>;
+  private client: OpenAI;
 
   constructor({
     apiKey,
@@ -35,7 +32,7 @@ export class LLM {
     baseURL,
   }: { apiKey?: string; model?: string; baseURL?: string } = {}) {
     this.apiKey = apiKey || process.env.PPIO_API_KEY;
-    this.baseURL = baseURL || process.env.PPIO_BASE_URL;
+    this.baseURL = normalizeBaseURL(baseURL || process.env.PPIO_BASE_URL);
     this.model = model || DEFAULT_MODEL;
 
     logger.info("LLM model:", this.model);
@@ -44,8 +41,8 @@ export class LLM {
       this.apiKey ? `${this.apiKey.slice(0, 4)}***` : "missing"
     );
     logger.info("LLM baseURL:", this.baseURL);
-    this.client = createPPIOProvider({
-      apiKey: this.apiKey,
+    this.client = new OpenAI({
+      apiKey: this.apiKey || "",
       baseURL: this.baseURL,
     });
   }
@@ -59,15 +56,26 @@ export class LLM {
   ): Promise<string> {
     logger.info("prompt length:", prompt?.length || 0);
     try {
-      const { text } = await generateText({
-        model: this.client.chatModel(this.model),
-        system: systemPrompt,
-        prompt,
+      const messages: ChatCompletionMessageParam[] = [];
+      if (systemPrompt) {
+        messages.push({ role: "system", content: systemPrompt });
+      }
+      messages.push({ role: "user", content: prompt });
+
+      const completion = await this.client.chat.completions.create({
+        model: this.model,
+        messages,
         temperature,
       });
+      const text =
+        completion.choices?.[0]?.message?.content?.trim() || "";
       logger.info("LLM text response length:", text.length);
+      if (!text) {
+        throw new Error("OpenAI 返回空响应");
+      }
       return text;
     } catch (e: any) {
+      logger.error("LLM text failed:", e);
       throw new Error(`调用OpenAI API失败: ${e?.message || e}`);
     }
   }
@@ -77,18 +85,38 @@ export class LLM {
     {
       systemPrompt = "请以有效的JSON格式回复，不要包含任何其他文本。不要包含markdown格式的前后缀！",
       temperature = 0.3,
-      schema = z.record(z.unknown()),
-    }: { systemPrompt?: string; temperature?: number; schema?: z.ZodType<any> } = {}
+      schema = z.record(z.undefined()),
+    }: {
+      systemPrompt?: string;
+      temperature?: number;
+      schema?: z.ZodType<any>;
+    } = {}
   ): Promise<any> {
     try {
-      const { object } = await generateObject({
-        model: this.client.chatModel(this.model),
-        system: systemPrompt,
-        prompt,
+      const messages: ChatCompletionMessageParam[] = [];
+      if (systemPrompt) {
+        messages.push({ role: "system", content: systemPrompt });
+      }
+      messages.push({ role: "user", content: prompt });
+
+      const completion = await this.client.chat.completions.create({
+        model: this.model,
+        messages,
         temperature,
-        schema,
       });
-      logger.info("LLM json response:", JSON.stringify(object).length, "characters");
+      const rawContent =
+        completion.choices?.[0]?.message?.content?.trim() || "";
+      if (!rawContent) {
+        throw new Error("OpenAI 返回空JSON响应");
+      }
+      const sanitized = sanitizeJson(rawContent);
+      const parsed = JSON.parse(sanitized);
+      const object = schema ? schema.parse(parsed) : parsed;
+      logger.info(
+        "LLM json response:",
+        JSON.stringify(object).length,
+        "characters"
+      );
       return object;
     } catch (e: any) {
       logger.error("LLM json failed:", e);
